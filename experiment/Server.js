@@ -3,7 +3,8 @@ const WebSocket = require('ws');
 const wrtc = require('wrtc');
 
 let localConnection;
-let wsClient;
+let wss;
+let clients = {}; // Store connected clients
 
 function getSignalingoffer(ws)
 {
@@ -38,11 +39,20 @@ function getSignalingoffer(ws)
 
 function websocketConnection()
 {
-    wsClient = new WebSocket.Server({port:8080});
+    wss = new WebSocket.Server({port:8080});
     console.log("Successfully build server.");
 
-    wsClient.on('connection', (ws) => {
+    let nextId = 1; // Initialize client id counter
+    wss.on('connection', (ws) => {
+        //建立client id
         console.log("Connection in.");
+        const id = `user${nextId++}`;
+        ws.id = id;
+        clients[id] = ws; // Store the client in the clients object
+        ws.send(JSON.stringify({ type: "welcome", id: id })); // Send welcome message with client id
+
+        broadcast({ type: "user-joined", id });
+
         getSignalingoffer(ws);
         ws.on("message", (msg)=>
         {
@@ -51,10 +61,23 @@ function websocketConnection()
             
         });
     });//(ws)=>{} is lambda expression.
-    wsClient.on('message', (data)=>{
+    wss.on('message', (data)=>{
         const answer = JSON.parse(data);
         localConnection.setRemoteDescription(new wrtc.RTCSessionDescription(answer).then(()=> console.log("Remote answer set!")));
     });
+
+
+    ws.on('close', () => {
+    delete clients[id];
+    broadcast({ type: "user-left", id });
+  });
 }
+
+function broadcast(message) {
+  Object.values(clients).forEach(ws => {
+    ws.send(JSON.stringify(message));
+  });
+}
+
 
 websocketConnection();

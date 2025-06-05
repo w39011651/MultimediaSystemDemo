@@ -7,22 +7,6 @@ const config = {
 
 function getSignalinganswer(offer)
 {
-    // const localConnection = new wrtc.RTCPeerConnection(config);
-    
-    // localConnection.onicecandidate = e =>
-    // {
-    //     console.log("New Ice candidate! on localconnection reprinting SDP");
-    //     console.log(JSON.stringify(localConnection.localDescription));
-    // }
-
-    // const sendChannel = localConnection.createDataChannel("sendChannel");
-
-    // sendChannel.onmessage = e => console.log("message received"+ e.data);
-    // sendChannel.onopen = e => console.log("opened");
-    // sendChannel.onclose = e => console.log("closed");
-
-    // localConnection.createOffer().then(o=>localConnection.setLocalDescription(o));
-
     const remoteConnection = new wrtc.RTCPeerConnection(config);
 
     remoteConnection.ondatachannel = e =>
@@ -33,8 +17,7 @@ function getSignalinganswer(offer)
         receiveChannel.onclose = e => console.log("closed");
     }
     remoteConnection.setRemoteDescription(offer).then(a=>console.log("done"));
-    remoteConnection.createAnswer().then(a => remoteConnection.setLocalDescription(a)).then(a=>
-    console.log(JSON.stringify(remoteConnection.localDescription)));
+    remoteConnection.createAnswer().then(a => remoteConnection.setLocalDescription(a));
 }
 
 function connectToServer()
@@ -54,6 +37,11 @@ function connectToServer()
         try
         {
             obj = JSON.parse(offer_str);
+            //印出當前client id
+            if (obj.type === "welcome" && obj.id) {
+                console.log("我的 client id:", obj.id);
+            }
+
             isJSON = true;
         }catch(e)
         {
