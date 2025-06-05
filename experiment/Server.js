@@ -1,6 +1,7 @@
 const { connect } = require('http2');
 const WebSocket = require('ws');
 const wrtc = require('wrtc');
+const readline = require('readline')
 
 let localConnection;
 let wsClient;
@@ -13,24 +14,37 @@ function getSignalingoffer(ws)
 
     localConnection = new wrtc.RTCPeerConnection(config)
 
-    localConnection.onicecandidate = e =>  {
-        console.log(" NEW ice candidate!! on localconnection reprinting SDP " );
-        //console.log(JSON.stringify(localConnection.localDescription));
-        if (localConnection.localDescription)
+    localConnection.onicecandidate = e =>  
+    {
+        if(e.candidate == null)
         {
-            if(ws && ws.readyState == ws.OPEN)
+            console.log(" NEW ice candidate!! on localconnection reprinting SDP " );
+            //console.log(JSON.stringify(localConnection.localDescription));
+            if (localConnection.localDescription)
             {
-                ws.send(JSON.stringify(localConnection.localDescription));
-                console.log("Send the SDP offer.");
+                if(ws && ws.readyState == ws.OPEN)
+                {
+                    ws.send(JSON.stringify(localConnection.localDescription));
+                    console.log("Send the SDP offer.");
+                }
             }
         }
-
     }  //print the local description or SDP on console
 
     const sendChannel = localConnection.createDataChannel("sendChannel"); 
     //create local data channel for data transmission
-    sendChannel.onmessage =e =>  console.log("messsage received!!!"  + e.data )
-    sendChannel.onopen = e => console.log("opened!!!!");
+    sendChannel.onmessage =e =>  console.log("messsage received: "  + e.data )
+    sendChannel.onopen = (e) => 
+    {
+        console.log("opened");
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+        rl.on('line', (input)=>{
+            sendChannel.send(input);
+        });
+    };
     sendChannel.onclose =e => console.log("closed!!!!!!");
 
     localConnection.createOffer().then(o => localConnection.setLocalDescription(o) ); // create local session description or SDP
@@ -44,16 +58,37 @@ function websocketConnection()
     wsClient.on('connection', (ws) => {
         console.log("Connection in.");
         getSignalingoffer(ws);
-        ws.on("message", (msg)=>
+        ws.on("message", (data)=>
         {
-            console.log("Server receive message:", msg);
-            ws.send("The response from server");
-            
+            console.log('Server 收到:', JSON.stringify(data));
+            let answer_str = data.toString('utf-8');
+            let isJSON = null;
+            let obj = null;
+
+            try
+            {
+                obj = JSON.parse(answer_str);
+                isJSON = true;
+            }catch(e)
+            {
+                isJSON = false;
+            }
+
+            if (isJSON)
+            {
+                console.log("收到JSON", obj);
+                localConnection.setRemoteDescription(new wrtc.RTCSessionDescription(obj));
+                console.log("Remote answer set!");
+            }
+            else
+            {
+                console.log("非JSON字串", answer_str);
+            }
         });
     });//(ws)=>{} is lambda expression.
     wsClient.on('message', (data)=>{
-        const answer = JSON.parse(data);
-        localConnection.setRemoteDescription(new wrtc.RTCSessionDescription(answer).then(()=> console.log("Remote answer set!")));
+        console.log('Server 收到:', JSON.stringify(data));
+        
     });
 }
 
