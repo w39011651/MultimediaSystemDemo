@@ -1,23 +1,46 @@
 const WebSocket = require('ws');
 const wrtc = require('wrtc')
+const readline = require('readline')
 
 const config = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
 }
-
-function getSignalinganswer(offer)
+/**
+ * @param {WebSocket} client
+ * @param {object} offer\
+ */
+function getSignalinganswer(client, offer)
 {
     const remoteConnection = new wrtc.RTCPeerConnection(config);
 
     remoteConnection.ondatachannel = e =>
     {
         receiveChannel = e.channel;
-        receiveChannel.onmessage= e => console.log("message received" + e.data);
-        receiveChannel.onopen = e => console.log("opened");
+        receiveChannel.onmessage= e => console.log("message received: " + e.data);
+        receiveChannel.onopen = (e) => 
+        {
+            console.log("opened");
+            const rl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+            });
+            rl.on('line', (input)=>{
+                receiveChannel.send(input);
+            });
+        };
         receiveChannel.onclose = e => console.log("closed");
     }
     remoteConnection.setRemoteDescription(offer).then(a=>console.log("done"));
-    remoteConnection.createAnswer().then(a => remoteConnection.setLocalDescription(a));
+    remoteConnection.createAnswer().then(a => remoteConnection.setLocalDescription(a)).then(a=>
+        {
+            console.log(JSON.stringify(remoteConnection.localDescription));
+            if(client && client.readyState == WebSocket.OPEN)
+            {
+                client.send(JSON.stringify(remoteConnection.localDescription));
+                console.log("Send answer.");
+            }
+        }
+    );
 }
 
 function connectToServer()
@@ -51,7 +74,7 @@ function connectToServer()
         if (isJSON)
         {
             console.log("收到JSON", obj);
-            getSignalinganswer(obj);
+            getSignalinganswer(client, obj);
         }
         else
         {
