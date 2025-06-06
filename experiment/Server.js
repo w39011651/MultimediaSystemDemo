@@ -7,6 +7,10 @@ let localConnection;
 let wsClient;
 let clients = {}; // Store connected clients
 
+/**
+ * 
+ * @param {WebSocket} ws 
+ */
 function getSignalingoffer(ws)
 {
     const config = {
@@ -67,7 +71,7 @@ function websocketConnection()
         const welcomeMessage = {type: "welcome", "payload":{"yourId":id, "roomPeers":[]}};
         for (let i = 1; i < nextId - 1; i++)
         {
-            welcomeMessage.payload.roomPeers.push({type:`user${i}`});
+            welcomeMessage.payload.roomPeers.push(JSON.stringify({peerId:`user${i}`}));
         }
 
         ws.send(JSON.stringify(welcomeMessage)); // Send welcome message with client id

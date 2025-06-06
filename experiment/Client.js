@@ -142,7 +142,7 @@ function connectToServer()
         }
         else if(isJSON && obj.type === "user_joined")
         {
-
+            //{ type: 'welcome', payload: { yourId: 'user3', roomPeers: [] } }
         }
         else
         {
