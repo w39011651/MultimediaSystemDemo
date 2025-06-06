@@ -5,6 +5,7 @@ const readline = require('readline')
 
 let localConnection;
 let wsClient;
+let clients = {}; // Store connected clients
 
 function getSignalingoffer(ws)
 {
@@ -55,8 +56,24 @@ function websocketConnection()
     wsClient = new WebSocket.Server({port:8080});
     console.log("Successfully build server.");
 
+    let nextId = 1; // Initialize client id counter
     wsClient.on('connection', (ws) => {
+        //建立client id
         console.log("Connection in.");
+        const id = `user${nextId++}`;
+        ws.id = id;
+        clients[id] = ws; // Store the client in the clients object
+        
+        const welcomeMessage = {type: "welcome", "payload":{"yourId":id, "roomPeers":[]}};
+        for (let i = 1; i < nextId - 1; i++)
+        {
+            welcomeMessage.payload.roomPeers.push({type:`user${i}`});
+        }
+
+        ws.send(JSON.stringify(welcomeMessage)); // Send welcome message with client id
+
+        //broadcast({ type: "user-joined", id });
+
         getSignalingoffer(ws);
         ws.on("message", (data)=>
         {
@@ -92,12 +109,12 @@ function websocketConnection()
     });
 }
 
-function boardcast(message)
-{
-    Object.values(clients).forEach(ws=>{
-        ws.send(JSON.stringify(message));
-    });
+function broadcast(message) {
+  Object.values(clients).forEach(ws => {
+    ws.send(JSON.stringify(message));
+  });
 }
+
 
 websocketConnection();
 /*

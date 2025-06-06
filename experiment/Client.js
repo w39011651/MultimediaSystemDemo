@@ -60,13 +60,18 @@ function connectToServer()
         try
         {
             obj = JSON.parse(offer_str);
+            //印出當前client id
+            // if (obj.type === "welcome" && obj.id) {
+            //     console.log("我的 client id:", obj.id);
+            // }
+
             isJSON = true;
         }catch(e)
         {
             isJSON = false;
         }
 
-        if (isJSON && (obj['type'] == 'offer' || obj['type'] == 'answer') )
+        if (isJSON && (obj.type === "offer" || obj.type === "answer"))
         {
             console.log("收到JSON", obj);
             getSignalinganswer(client, obj);
