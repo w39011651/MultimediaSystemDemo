@@ -3,6 +3,7 @@ const config = require('./config');
 const ClientManager = require('./managers/ClientManager');
 const handleMessage = require('./handlers/messageHandler');
 const logger = require('./utils/logger');
+const EVENT = require('./constants/events');
 
 const wsServer = new WebSocket.Server({port: config.PORT});
 logger.info(`Server started on ws://localhost:${config.PORT}`);
@@ -13,9 +14,9 @@ wsServer.on('connection', (ws) => {
 
         const id = ClientManager.addClient(ws);
         const userList = Object.keys(ClientManager.getAllClients()).filter(uid => uid !== id);
-        ws.send(JSON.stringify({ type: "welcome", id, userList }));
+        ws.send(JSON.stringify({ type: EVENT.WELCOME, id, userList }));
 
-        //broadcast({ type: "user-joined", id });
+        ClientManager.broadcast({ type: EVENT.USER_JOINED, id });
 
         ws.on("message", (data)=>
         {
