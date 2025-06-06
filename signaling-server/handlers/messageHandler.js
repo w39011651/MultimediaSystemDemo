@@ -41,6 +41,25 @@ module.exports = function(ws, data) {
         );
         return;
     }
+    console.log('收到 video-invite:', obj.nickname);
+    if (obj.type === 'video-invite') {
+        Object.values(ClientManager.getAllClients()).forEach(client => {
+            client.send(JSON.stringify({ type: 'video-invite', nickname: obj.nickname }));
+        });
+        return;
+    }
+    if (obj.type === 'video-join') {
+        Object.values(ClientManager.getAllClients()).forEach(client => {
+            client.send(JSON.stringify({ type: 'video-join', nickname: obj.nickname }));
+        });
+        return;
+    }
+    if (['offer', 'answer', 'candidate'].includes(obj.type)) {
+        Object.values(ClientManager.getAllClients()).forEach(client => {
+            if (client !== ws) client.send(JSON.stringify(obj));
+        });
+        return;
+    }
     if (obj.toId && ClientManager.getClient(obj.toId)) {
         ClientManager.getClient(obj.toId).send(JSON.stringify({ ...obj, fromId: ws.id }));
         logger.info(`Message sent from ${ws.id} to ${obj.toId}`);
