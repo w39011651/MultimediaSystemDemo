@@ -66,7 +66,7 @@ function connectToServer()
             isJSON = false;
         }
 
-        if (isJSON)
+        if (isJSON && (obj['type'] == 'offer' || obj['type'] == 'answer') )
         {
             console.log("收到JSON", obj);
             getSignalinganswer(client, obj);

@@ -74,7 +74,7 @@ function websocketConnection()
                 isJSON = false;
             }
 
-            if (isJSON)
+            if (isJSON && (obj['type'] == 'offer' || obj['type'] == 'answer') )
             {
                 console.log("收到JSON", obj);
                 localConnection.setRemoteDescription(new wrtc.RTCSessionDescription(obj));
@@ -92,4 +92,33 @@ function websocketConnection()
     });
 }
 
+function boardcast(message)
+{
+    Object.values(clients).forEach(ws=>{
+        ws.send(JSON.stringify(message));
+    });
+}
+
 websocketConnection();
+/*
+    UserA --> Room 13:00
+    ---
+    UserB --> Room 13:05
+
+    Server --> UserA send offer
+    Server --> UserB get offerA and send answer
+    Server --> User get answer
+    ---
+    UserC --> Room 15:00
+
+    Server --> UserA send offer
+    Server --> UserB send offer
+    Server --> UserC send offer
+
+    Server --> UserA get offerB and send answer
+    Server --> UserA get offerC and send answer
+    Server --> UserB get offerA and send answer
+    Server --> UserB get offerC and send answer
+    Server --> UserC get offerA and send answer
+    Server --> UserC get offerB and send answer
+ */
