@@ -3,53 +3,53 @@ const WebSocket = require('ws');
 const wrtc = require('wrtc');
 const readline = require('readline')
 
-let localConnection;
+//let localConnection;
 let wsClient;
 let clients = {}; // Store connected clients
 
-function getSignalingoffer(ws)
-{
-    const config = {
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    }
+// function getSignalingoffer(ws)
+// {
+//     const config = {
+//     iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+//     }
 
-    localConnection = new wrtc.RTCPeerConnection(config)
+//     localConnection = new wrtc.RTCPeerConnection(config)
 
-    localConnection.onicecandidate = e =>  
-    {
-        if(e.candidate == null)
-        {
-            console.log(" NEW ice candidate!! on localconnection reprinting SDP " );
-            //console.log(JSON.stringify(localConnection.localDescription));
-            if (localConnection.localDescription)
-            {
-                if(ws && ws.readyState == ws.OPEN)
-                {
-                    ws.send(JSON.stringify(localConnection.localDescription));
-                    console.log("Send the SDP offer.");
-                }
-            }
-        }
-    }  //print the local description or SDP on console
+//     localConnection.onicecandidate = e =>  
+//     {
+//         if(e.candidate == null)
+//         {
+//             console.log(" NEW ice candidate!! on localconnection reprinting SDP " );
+//             //console.log(JSON.stringify(localConnection.localDescription));
+//             if (localConnection.localDescription)
+//             {
+//                 if(ws && ws.readyState == ws.OPEN)
+//                 {
+//                     ws.send(JSON.stringify(localConnection.localDescription));
+//                     console.log("Send the SDP offer.");
+//                 }
+//             }
+//         }
+//     }  //print the local description or SDP on console
 
-    const sendChannel = localConnection.createDataChannel("sendChannel"); 
-    //create local data channel for data transmission
-    sendChannel.onmessage =e =>  console.log("messsage received: "  + e.data )
-    sendChannel.onopen = (e) => 
-    {
-        console.log("opened");
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
-        rl.on('line', (input)=>{
-            sendChannel.send(input);
-        });
-    };
-    sendChannel.onclose =e => console.log("closed!!!!!!");
+//     const sendChannel = localConnection.createDataChannel("sendChannel"); 
+//     //create local data channel for data transmission
+//     sendChannel.onmessage =e =>  console.log("messsage received: "  + e.data )
+//     sendChannel.onopen = (e) => 
+//     {
+//         console.log("opened");
+//         const rl = readline.createInterface({
+//             input: process.stdin,
+//             output: process.stdout
+//         });
+//         rl.on('line', (input)=>{
+//             sendChannel.send(input);
+//         });
+//     };
+//     sendChannel.onclose =e => console.log("closed!!!!!!");
 
-    localConnection.createOffer().then(o => localConnection.setLocalDescription(o) ); // create local session description or SDP
-}
+//     localConnection.createOffer().then(o => localConnection.setLocalDescription(o) ); // create local session description or SDP
+// }
 
 function websocketConnection()
 {
@@ -57,24 +57,20 @@ function websocketConnection()
     console.log("Successfully build server.");
 
     let nextId = 1; // Initialize client id counter
+
     wsClient.on('connection', (ws) => {
         //建立client id
         console.log("Connection in.");
+
         const id = `user${nextId++}`;
         ws.id = id;
-        clients[id] = ws; // Store the client in the clients object
-        
-        const welcomeMessage = {type: "welcome", "payload":{"yourId":id, "roomPeers":[]}};
-        for (let i = 1; i < nextId - 1; i++)
-        {
-            welcomeMessage.payload.roomPeers.push({type:`user${i}`});
-        }
+        clients[id] = ws;
 
-        ws.send(JSON.stringify(welcomeMessage)); // Send welcome message with client id
+        const userList = Object.keys(clients).filter(uid => uid !== id);
+        ws.send(JSON.stringify({ type: "welcome", id, userList }));
 
-        //broadcast({ type: "user-joined", id });
+        broadcast({ type: "user-joined", id });
 
-        getSignalingoffer(ws);
         ws.on("message", (data)=>
         {
             console.log('Server 收到:', JSON.stringify(data));
@@ -94,18 +90,23 @@ function websocketConnection()
             if (isJSON)
             {
                 console.log("收到JSON", obj);
-                localConnection.setRemoteDescription(new wrtc.RTCSessionDescription(obj));
-                console.log("Remote answer set!");
+                if (obj.toId && clients[obj.toId]) {
+                    clients[obj.toId].send(JSON.stringify({ ...obj, fromId: id }));
+                    console.log(`Message sent to ${obj.toId}`);
+                } else {
+                    console.log(`Client ${obj.toId} not found`);
+                }
             }
             else
             {
                 console.log("非JSON字串", answer_str);
             }
         });
-    });//(ws)=>{} is lambda expression.
-    wsClient.on('message', (data)=>{
-        console.log('Server 收到:', JSON.stringify(data));
-        
+
+        ws.on('close', () => {
+                delete clients[id];
+            });
+
     });
 }
 
