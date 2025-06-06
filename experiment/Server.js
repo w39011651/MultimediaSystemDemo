@@ -63,7 +63,14 @@ function websocketConnection()
         const id = `user${nextId++}`;
         ws.id = id;
         clients[id] = ws; // Store the client in the clients object
-        //ws.send(JSON.stringify({ type: "welcome", id: id })); // Send welcome message with client id
+        
+        const welcomeMessage = {type: "welcome", "payload":{"yourId":id, "roomPeers":[]}};
+        for (let i = 1; i < nextId - 1; i++)
+        {
+            welcomeMessage.payload.roomPeers.push({type:`user${i}`});
+        }
+
+        ws.send(JSON.stringify(welcomeMessage)); // Send welcome message with client id
 
         //broadcast({ type: "user-joined", id });
 
