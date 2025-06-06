@@ -1,0 +1,101 @@
+<!-- 建議存檔為 signaling-client/test-chat.html -->
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>簡易聊天室（多頻道）</title>
+  <style>
+    body { font-family: sans-serif; }
+    #chat { border: 1px solid #ccc; height: 300px; overflow-y: auto; margin-bottom: 8px; padding: 8px; }
+    #channels { margin-bottom: 8px; }
+    #msg { width: 70%; }
+  </style>
+</head>
+<body>
+  <h2>簡易聊天室（多頻道）</h2>
+  <div>
+    暱稱：<input id="nickname" placeholder="輸入暱稱" />
+    <button onclick="connect()">連線</button>
+  </div>
+  <div id="channels">
+    頻道：
+    <select id="channelSelect">
+      <option value="general">general</option>
+      <option value="music">music</option>
+      <option value="game">game</option>
+    </select>
+  </div>
+  <div id="chat"></div>
+  <input id="msg" placeholder="輸入訊息..." />
+  <button onclick="sendMsg()">送出</button>
+
+  <script>
+    let ws, nickname, currentChannel = 'general';
+    // 新增：本地快取每個頻道的訊息
+    const channelHistory = {};
+
+    document.getElementById('channelSelect').onchange = function() {
+        currentChannel = this.value;
+        document.getElementById('chat').innerHTML = '';
+        // 每次切換都向 server 請求最新歷史訊息
+        if (ws && ws.readyState === 1) {
+            ws.send(JSON.stringify({
+                type: 'history',
+                channel: currentChannel
+            }));
+        }
+    };
+
+    function connect() {
+    nickname = document.getElementById('nickname').value || '匿名';
+    ws = new WebSocket('ws://localhost:8080');
+    ws.onopen = () => {
+        log('已連線到伺服器');
+        // 連線後主動請求預設頻道歷史訊息
+        ws.send(JSON.stringify({ type: 'history', channel: currentChannel }));
+    };
+    ws.onmessage = (event) => {
+        try {
+            const msg = JSON.parse(event.data);
+            // 處理歷史訊息
+            if (msg.type === 'history' && msg.channel === currentChannel && Array.isArray(msg.messages)) {
+                channelHistory[currentChannel] = msg.messages.map
+                (
+                    m => `<b>${m.nickname}：</b> ${m.text}`
+                );
+            document.getElementById('chat').innerHTML = '';
+            channelHistory[currentChannel].forEach(m => log(m));
+            return;
+            }
+            // 處理聊天訊息
+            if (msg.type === 'chat' && msg.channel === currentChannel) {
+                const line = `<b>${msg.nickname}：</b> ${msg.text}`;
+                if (!channelHistory[currentChannel]) channelHistory[currentChannel] = [];
+                channelHistory[currentChannel].push(line);
+                log(line);
+            }
+        } catch {}
+    };
+    ws.onclose = () => log('連線已關閉');
+    }
+
+    function sendMsg() {
+    const text = document.getElementById('msg').value;
+    if (!ws || ws.readyState !== 1) return alert('請先連線');
+    ws.send(JSON.stringify({
+        type: 'chat',
+        channel: currentChannel,
+        nickname,
+        text
+    }));
+    document.getElementById('msg').value = '';
+    }
+
+    function log(msg) {
+    const chat = document.getElementById('chat');
+    chat.innerHTML += msg + '<br>';
+    chat.scrollTop = chat.scrollHeight;
+    }
+    </script>
+</body>
+</html>
