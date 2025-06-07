@@ -64,7 +64,7 @@ const handleChannelClick = (channelId: string, type: 'text' | 'voice') => {
               key={channel.id}
               channel={channel}
               isActive={channel.id === activeVoiceChannelId}
-              usersInChannel={channel.id === activeVoiceChannelId ? voiceChannelMembers[channel.id] : undefined}
+              usersInChannel={voiceChannelMembers[channel.id]}
               onClick={handleChannelClick}
             />
           ))}

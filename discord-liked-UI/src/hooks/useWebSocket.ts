@@ -15,6 +15,7 @@ export const useWebSocket = () => {
     const historyCallbackRef = useRef<(messages: any[]) => void | null>(null);
     const voiceMessageHandlerRef = useRef<(message: any) => void | null>(null);
     const messageBuffer = useRef<any[]>([]); // 新增訊息暫存
+    const [voiceChannelMembers, setVoiceChannelMembers] = useState<Record<string, User[]>>({});
 
     useEffect(() => {
         // 連接 WebSocket
@@ -37,6 +38,7 @@ export const useWebSocket = () => {
             if (msg.type === "welcome") {
                 setMyId(msg.id);
                 console.log('我的 ID:', msg.id, '現有用戶:', msg.userList);
+                //console.log('[前端] welcome.voiceChannelMembers:', msg.voiceChannelMembers);
                 
                 // 將 userList 轉換為 User 物件
                 const userObjects: User[] = msg.userList.map((userId: string) => ({
@@ -45,6 +47,19 @@ export const useWebSocket = () => {
                     status: 'online' as 'online' | 'offline' | 'away'
                 }));
                 setUsers(userObjects);
+
+                if (msg.voiceChannelMembers) {
+                    // msg.voiceChannelMembers: { [channelId]: {id, name}[] }
+                    const members: Record<string, User[]> = {};
+                    Object.entries(msg.voiceChannelMembers).forEach(([cid, users]) => {
+                        members[cid] = (users as any[]).map(u => ({
+                            id: u.id,
+                            name: u.name,
+                            status: 'online'
+                        }));
+                    });
+                    setVoiceChannelMembers(members);
+                }
                 
             } else if (msg.type === "user-joined") {
                 // 新使用者加入
@@ -105,6 +120,16 @@ export const useWebSocket = () => {
                 if (historyCallbackRef.current) {
                     historyCallbackRef.current(msg.messages);
                 }
+            } else if (msg.type === "VOICE_CHANNEL_MEMBERS_UPDATE") {
+                const members: Record<string, User[]> = {};
+                Object.entries(msg.voiceChannelMembers).forEach(([cid, users]) => {
+                    members[cid] = (users as any[]).map(u => ({
+                        id: u.id,
+                        name: u.name,
+                        status: 'online'
+                    }));
+                });
+                setVoiceChannelMembers(members);
             } else {
                 console.warn('[useWebSocket] 未處理的訊息類型:', msg.type, msg);
             }
@@ -163,6 +188,8 @@ export const useWebSocket = () => {
         sendMessage,
         setTextMessageCallback,
         setVoiceMessageHandler,
-        setHistoryCallback
+        setHistoryCallback,
+        voiceChannelMembers,
+        setVoiceChannelMembers,
     };
 };

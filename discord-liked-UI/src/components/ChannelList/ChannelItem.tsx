@@ -65,7 +65,7 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({
             >
             {channel.type === 'text' ? '#' : '🔊'} {channel.name}
         </li>
-        {channel.type === 'voice' && isActive && usersInChannel && usersInChannel.length > 0 && (
+        {channel.type === 'voice' && usersInChannel && usersInChannel.length > 0 && (
             <ul style={{ padding: 0, margin: '0 0 5px 0' }}> {/* 移除 ul 的預設 padding */}
                 {usersInChannel.map(user => (
                     <li key={user.id} style={userItemStyle}>

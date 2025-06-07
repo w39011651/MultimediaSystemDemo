@@ -4,9 +4,8 @@ import { useWebSocketContext } from "./WebSocketProvider";
 import type { User } from '../types';
 
 export const useVoice = () => {
-    const { myId, sendMessage, setVoiceMessageHandler } = useWebSocketContext();
+    const { myId, sendMessage, setVoiceMessageHandler, voiceChannelMembers, setVoiceChannelMembers } = useWebSocketContext();
     const [activeVoiceChannelId, setActiveVoiceChannelId] = useState<string | null>(null);
-    const [voiceChannelMembers, setVoiceChannelMembers] = useState<Record<string, User[]>>({}); // { channelId: [User, User, ...] }
 
     const handleVoiceMessage = useCallback((msg: any) => {
         console.log("[useVoice] Received voice message in handleVoiceMessage:", msg);
@@ -19,7 +18,7 @@ export const useVoice = () => {
                         status: 'online', // 預設狀態，可擴展
                     }));
                     console.log(`[useVoice] VOICE_CHANNEL_STATUS: Setting voiceChannelMembers for ${msg.channelId}:`, users); // DEBUG
-                    setVoiceChannelMembers(prev => {
+                    setVoiceChannelMembers((prev: Record<string, User[]>) => {
                         const newState = { ...prev, [msg.channelId]: users };
                         console.log("[useVoice] VOICE_CHANNEL_STATUS: New voiceChannelMembers state (inside setter):", newState);
                         return newState;
@@ -41,7 +40,7 @@ export const useVoice = () => {
                     console.log(`[useVoice] VOICE_CHANNEL_STATUS: Setting voiceChannelMembers for ${msg.channelId}:`, newUser.id); 
                     
                     // 關鍵點：這裡的狀態更新是否正確觸發並傳播？
-                    setVoiceChannelMembers(prev => {
+                    setVoiceChannelMembers((prev: Record<string, User[]>) => {
                         console.log(`[useVoice] VOICE_USER_JOINED: prev state for channel ${msg.channelId}:`, prev[msg.channelId]); // 新增日誌
                         const currentChannelUsers = prev[msg.channelId] || [];
                         // 避免重複添加同一使用者
@@ -61,7 +60,7 @@ export const useVoice = () => {
             case VOICE_EVENT_TYPES.VOICE_USER_LEFT: // 其他使用者離開目前所在的語音頻道
                 if (msg.channelId && msg.userId) {
                     console.log(`[useVoice] VOICE_USER_LEFT: User ${msg.userId} left channel ${msg.channelId}`);
-                    setVoiceChannelMembers(prev => {
+                    setVoiceChannelMembers((prev: Record<string, User[]>) => {
                         const currentChannelUsers = prev[msg.channelId] || [];
                         const updatedUsers = currentChannelUsers.filter(u => u.id !== msg.userId);
                         const newState = { ...prev, [msg.channelId]: updatedUsers };
@@ -107,7 +106,7 @@ export const useVoice = () => {
             });
             // 可以選擇性地在這裡清除舊頻道的成員列表，或等待伺服器確認
             // 樂觀地清除舊頻道的成員，或者等待伺服器確認
-            setVoiceChannelMembers(prev => {
+            setVoiceChannelMembers((prev: Record<string, User[]>) => {
                 const newState = {...prev};
                 if (activeVoiceChannelId) { // 確保 activeVoiceChannelId 不是 null
                     delete newState[activeVoiceChannelId];
@@ -137,7 +136,7 @@ export const useVoice = () => {
                 payload: { channelId: activeVoiceChannelId },
             });
             setActiveVoiceChannelId(null); // 樂觀更新
-            setVoiceChannelMembers(prev => { // 清理該頻道的成員
+            setVoiceChannelMembers((prev: Record<string, User[]>) => { // 清理該頻道的成員
                 const newState = {...prev};
                 delete newState[activeVoiceChannelId];
                 return newState;

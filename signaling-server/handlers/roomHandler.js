@@ -59,6 +59,7 @@ function handleJoinVoice(ws, payload){
             }
         }
     });
+    broadcastVoiceChannelMembers();
     logger.info(`User ${clientId} (${clientName}) joined voice channel ${channelId}`);
 }
 
@@ -94,9 +95,23 @@ function handleLeaveVoice(ws, payload) {
     } else {
         logger.warn(`User ${clientId} tried to leave voice channel ${channelId} but was not in it or channel did not exist.`);
     }
+    broadcastVoiceChannelMembers();
+}
+
+function broadcastVoiceChannelMembers() {
+    const allVoiceChannelMembers = {};
+    const voiceChannelIds = ['voice1', 'voice2'];
+    voiceChannelIds.forEach(cid => {
+        allVoiceChannelMembers[cid] = RoomManager.getUsersInVoiceChannel(cid);
+    });
+    ClientManager.broadcast({
+        type: 'VOICE_CHANNEL_MEMBERS_UPDATE',
+        voiceChannelMembers: allVoiceChannelMembers
+    });
 }
 
 module.exports = {
     handleJoinVoice,
     handleLeaveVoice,
+    broadcastVoiceChannelMembers
 };
