@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { User } from '../types';
 
 export const useWebSocket = () => {
@@ -16,6 +16,11 @@ export const useWebSocket = () => {
         ws.current.onopen = () => {
             console.log('已連上 signaling server');
             setIsConnected(true);
+            // 連線一建立就送 get-history，預設頻道
+            ws.current?.send(JSON.stringify({
+                type: "get-history",
+                channelId: "chat1" // 或 activeChannel 的預設值
+            }));
         };
 
         ws.current.onmessage = (event) => {
@@ -71,11 +76,11 @@ export const useWebSocket = () => {
         };
     }, []);
 
-    const sendMessage = (message: any) => {
-        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-            ws.current.send(JSON.stringify(message));
-        }
-    };
+    const sendMessage = useCallback((message: any) => {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify(message));
+    }
+}, []);
 
     // 讓其他 hook 註冊文字訊息回呼
     const setTextMessageCallback = (callback: ((message: any) => void) | null) => {
