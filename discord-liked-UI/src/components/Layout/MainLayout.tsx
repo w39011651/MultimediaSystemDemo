@@ -1,32 +1,33 @@
+import React from 'react';
 import { ChannelList } from '../ChannelList/ChannelList';
 import { ChatArea } from '../ChatArea/ChatArea';
 import type { Message, Channel } from '../../types';
+import { text } from 'stream/consumers';
 
 interface MainLayoutProps {
-  channels?: Channel[];
+  textChannels: Channel[];
+  voiceChannels: Channel[];
   messages: Message[];
   input: string;
   activeChannel: string;
   setInput: (value: string) => void;
   sendMessage: () => void;
-  switchChannel: (channelId: string) => void;
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
-  channels = [], // 預設空陣列
+  textChannels,
+  voiceChannels,
   messages,
   input,
   activeChannel,
   setInput,
   sendMessage,
-  switchChannel
 }) => {
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw' }}>
       <ChannelList
-        channels={channels}
-        activeChannel={activeChannel}
-        onChannelClick={switchChannel}
+        textChannels={textChannels}
+        voiceChannels={voiceChannels}
       />
       <ChatArea
         messages={messages}

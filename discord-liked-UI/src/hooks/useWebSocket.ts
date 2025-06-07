@@ -7,6 +7,7 @@ export const useWebSocket = () => {
     const [users, setUsers] = useState<User[]>([]);
     const ws = useRef<WebSocket | null>(null);
     const textMessageCallbackRef = useRef<(message: any) => void | null>(null);
+    const voiceMessageHandlerRef = useRef<(message: any) => void | null>(null);
 
     useEffect(() => {
         // 連接 WebSocket
@@ -76,12 +77,16 @@ export const useWebSocket = () => {
     const setTextMessageCallback = (callback: ((message: any) => void) | null) => {
         textMessageCallbackRef.current = callback;
     };
+    const setVoiceMessageHandler = (callback : ((message: any) => void) | null ) => {
+        voiceMessageHandlerRef.current = callback;
+    };
 
     return {
         isConnected,
         myId,
         users,
         sendMessage,
-        setTextMessageCallback
+        setTextMessageCallback,
+        setVoiceMessageHandler
     };
 };
