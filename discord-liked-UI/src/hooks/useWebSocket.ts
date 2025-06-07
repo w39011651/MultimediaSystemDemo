@@ -12,6 +12,7 @@ export const useWebSocket = () => {
     const [users, setUsers] = useState<User[]>([]);
     const ws = useRef<WebSocket | null>(null);
     const textMessageCallbackRef = useRef<(message: any) => void | null>(null);
+    const historyCallbackRef = useRef<(messages: any[]) => void | null>(null);
     const voiceMessageHandlerRef = useRef<(message: any) => void | null>(null);
 
     useEffect(() => {
@@ -21,6 +22,11 @@ export const useWebSocket = () => {
         ws.current.onopen = () => {
             console.log('已連上 signaling server');
             setIsConnected(true);
+            // 連線一建立就送 get-history，預設頻道
+            ws.current?.send(JSON.stringify({
+                type: "get-history",
+                channelId: "chat1" // 或 activeChannel 的預設值
+            }));
         };
 
         ws.current.onmessage = (event) => {
@@ -52,6 +58,32 @@ export const useWebSocket = () => {
                 });
                 
                 console.log('[useWebSocket] 新使用者加入 (全域):', msg.id);
+                setUsers(prev => [...prev, newUser]);
+
+                // 新增：呼叫文字訊息 callback，產生系統訊息
+                if (textMessageCallbackRef.current) {
+                    textMessageCallbackRef.current({
+                        type: 'system-message',
+                        text: msg.message,
+                        timestamp: new Date().toISOString(),
+                        //channelId: msg.channelId || 'chat1', // 根據你的頻道設計
+                    });
+                }
+
+            } else if (msg.type === "user-left") {
+                // 使用者離開
+                setUsers(prev => prev.filter(user => user.id !== msg.id));
+                console.log('[useWebSocket] 使用者離開:', msg.id);
+
+                // 新增：呼叫文字訊息 callback，產生系統訊息
+                if (textMessageCallbackRef.current) {
+                    textMessageCallbackRef.current({
+                        type: 'system-message',
+                        text: msg.message,
+                        timestamp: new Date().toISOString(),
+                    });
+                }
+            
             } else if (msg.type === "text-message") {
                 if (textMessageCallbackRef.current) {
                     console.log('[useWebSocket] Forwarding text message to textMessageCallbackRef');
@@ -59,9 +91,6 @@ export const useWebSocket = () => {
                 } else {
                     console.warn('[useWebSocket] textMessageCallbackRef is null, cannot process text message:', msg);
                 }
-            } else if (msg.type === "user-left") {
-                setUsers(prev => prev.filter(user => user.id !== msg.id));
-                console.log('[useWebSocket] 使用者離開 (全域):', msg.id);
             } else if (isVoiceEventType(msg.type)) { // <--- 新增：判斷是否為語音事件
                 if (voiceMessageHandlerRef.current) {
                     console.log(`[useWebSocket] Forwarding voice message (type: ${msg.type}) to voiceMessageHandlerRef`);
@@ -69,10 +98,15 @@ export const useWebSocket = () => {
                 } else {
                     console.warn(`[useWebSocket] voiceMessageHandlerRef is null, cannot process voice message (type: ${msg.type}):`, msg);
                 }
+            } else if (msg.type === "history") {
+                if (historyCallbackRef.current) {
+                    historyCallbackRef.current(msg.messages);
+                }
             } else {
                 console.warn('[useWebSocket] 未處理的訊息類型:', msg.type, msg);
             }
-        };
+
+        }; 
 
         ws.current.onclose = () => {
             console.log('WebSocket 連線關閉');
@@ -111,12 +145,18 @@ export const useWebSocket = () => {
         voiceMessageHandlerRef.current = callback;
     }, []);
 
+    // 讓其他 hook 註冊歷史訊息回呼
+    const setHistoryCallback = (callback: ((messages: any[]) => void) | null) => {
+        historyCallbackRef.current = callback;
+    };
+
     return {
         isConnected,
         myId,
         users,
         sendMessage,
         setTextMessageCallback,
-        setVoiceMessageHandler
+        setVoiceMessageHandler,
+        setHistoryCallback
     };
 };

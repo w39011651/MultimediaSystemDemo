@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type{ Message } from '../types/index.ts';
+import type { Message } from '../types/index.ts';
 import { useWebSocket } from './useWebSocket';
 
 export const useChat = () => {
@@ -7,7 +7,8 @@ export const useChat = () => {
   const [input, setInput] = useState('');
   const [activeChannel, setActiveChannel] = useState<string>('chat1');
 
-  const { sendMessage: wsSendMessage, myId, setTextMessageCallback, users: connectedUsers } = useWebSocket();
+  // 這裡要從 useWebSocket 取得 setHistoryCallback
+  const { sendMessage: wsSendMessage, myId, setTextMessageCallback, setHistoryCallback, users: connectedUsers } = useWebSocket();
 
   // 處理收到的文字訊息的回呼函數
   const handleIncomingMessage = useCallback((msg: any) => {
@@ -15,28 +16,72 @@ export const useChat = () => {
       const sender = connectedUsers.find(u => u.id === msg.fromId);
       const newMessage: Message = {
         type: 'text-message',
-        id: `${msg.fromId}-${msg.timestamp}`, // 使用 fromId 和 timestamp 組成唯一 ID
+        id: `${msg.fromId}-${msg.timestamp}`,
         text: msg.text,
-        timestamp: new Date(msg.timestamp), // 將 ISO 字串轉換為 Date 物件
+        timestamp: new Date(msg.timestamp),
         channelId: msg.channelId,
         userId: msg.fromId,
-        userName: sender ? sender.name : msg.fromId, // 如果能找到使用者，則用其名稱
+        userName: sender ? sender.name : msg.fromId,
       };
       setMessages(prev => [...prev, newMessage]);
+    } else if (msg.type === 'system-message') {
+      const textChannels = ['chat1', 'chat2', 'chat3'];
+      const newMessages: Message[] = textChannels.map(channelId => ({
+        type: 'system-message',
+        id: `system-${Date.now()}`,
+        text: msg.text,
+        timestamp: new Date(msg.timestamp),
+        channelId,
+        userId: 'system',
+        userName: 'System',
+      }));
+      setMessages(prev => [...prev, ...newMessages]);
     }
-  }, [connectedUsers]); // connectedUsers 作為依賴項
+  }, [connectedUsers]);
 
-    // 註冊和清理回呼函數
+  // 註冊和清理文字訊息回呼
   useEffect(() => {
-    if (setTextMessageCallback) { // 確保 setTextMessageCallback 存在
-        setTextMessageCallback(handleIncomingMessage);
+    if (setTextMessageCallback) {
+      setTextMessageCallback(handleIncomingMessage);
     }
     return () => {
       if (setTextMessageCallback) {
-        setTextMessageCallback(null); // 清理
+        setTextMessageCallback(null);
       }
     };
   }, [setTextMessageCallback, handleIncomingMessage]);
+
+  // 處理歷史訊息回呼
+  useEffect(() => {
+    if (setHistoryCallback) {
+      setHistoryCallback((msgs: any[]) => {
+        const historyMessages: Message[] = msgs.map(msg => ({
+          type: 'text-message',
+          id: `${msg.fromId}-${msg.timestamp}`,
+          text: msg.text,
+          timestamp: new Date(msg.timestamp),
+          channelId: msg.channelId,
+          userId: msg.fromId,
+          userName: msg.fromId,
+        }));
+        setMessages(prev => {
+          // 避免重複，保留 system-message
+          const systemMessages = prev.filter(m => m.type === 'system-message');
+          return [...historyMessages, ...systemMessages];
+        });
+      });
+    }
+    return () => {
+      if (setHistoryCallback) setHistoryCallback(null);
+    };
+  }, [setHistoryCallback, activeChannel]);
+
+  // 每次切換頻道時自動請求歷史訊息
+  useEffect(() => {
+    if (wsSendMessage && activeChannel) {
+      wsSendMessage({ type: "get-history", channelId: activeChannel });
+    }
+  }, [wsSendMessage, activeChannel]);
 
   const sendMessage = () => {
     if (input.trim() && myId) {
@@ -45,17 +90,19 @@ export const useChat = () => {
         id: Date.now().toString(),
         text: input,
         timestamp: new Date(),
-        channelId: activeChannel
+        channelId: activeChannel,
+        userId: myId,
+        userName: myId,
       };
-      wsSendMessage && wsSendMessage(newMessage); // 呼叫 wsSendMessage 傳送訊息
-      setMessages(prev => [...prev, newMessage]);
+      wsSendMessage && wsSendMessage(newMessage);
+      //setMessages(prev => [...prev, newMessage]);
       setInput('');
     }
   };
 
   const switchChannel = (channelId: string) => {
     setActiveChannel(channelId);
-    // 可以在這裡載入該頻道的訊息
+    // 這裡不用再手動載入訊息，useEffect 會自動處理
   };
 
   return {
