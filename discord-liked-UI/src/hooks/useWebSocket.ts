@@ -48,10 +48,36 @@ export const useWebSocket = () => {
                 };
                 setUsers(prev => [...prev, newUser]);
                 console.log('新使用者加入:', msg.id);
+
+                // 新增：呼叫文字訊息 callback，產生系統訊息
+                if (textMessageCallbackRef.current) {
+                    textMessageCallbackRef.current({
+                        type: 'system-message',
+                        text: msg.message,
+                        timestamp: new Date().toISOString(),
+                        //channelId: msg.channelId || 'chat1', // 根據你的頻道設計
+                    });
+                }
+
+            } else if (msg.type === "user-left") {
+                // 使用者離開
+                setUsers(prev => prev.filter(user => user.id !== msg.id));
+                console.log('使用者離開:', msg.id);
+
+                // 新增：呼叫文字訊息 callback，產生系統訊息
+                if (textMessageCallbackRef.current) {
+                    textMessageCallbackRef.current({
+                        type: 'system-message',
+                        text: msg.message,
+                        timestamp: new Date().toISOString(),
+                    });
+                }
+            
             } else if (msg.type === "text-message") {
                 if (textMessageCallbackRef.current) {
                     textMessageCallbackRef.current(msg);
                 }
+
             } else if (msg.type === "history") {
                 if (historyCallbackRef.current) {
                     historyCallbackRef.current(msg.messages);

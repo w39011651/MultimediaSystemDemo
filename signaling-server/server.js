@@ -16,7 +16,11 @@ wsServer.on('connection', (ws) => {
         const userList = Object.keys(ClientManager.getAllClients()).filter(uid => uid !== id);
         ws.send(JSON.stringify({ type: EVENT.WELCOME, id, userList }));
 
-        ClientManager.broadcast({ type: EVENT.USER_JOINED, id });
+        ClientManager.broadcast({
+            type: EVENT.USER_JOINED,
+            id,
+            message: `(${id} 已加入聊天室)`
+        });
 
         ws.on("message", (data)=>
         {
@@ -25,6 +29,11 @@ wsServer.on('connection', (ws) => {
 
         ws.on('close', () => {
                 ClientManager.removeClient(ws);
+                ClientManager.broadcast({
+                    type: EVENT.USER_LEFT,
+                    id,
+                    message: `(${id} 已離開聊天室)`
+                });
             });
 
     });

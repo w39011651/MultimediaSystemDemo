@@ -28,12 +28,8 @@ module.exports = function(ws, data) {
             timestamp: messageToSend.timestamp
         });
 
-        Object.values(ClientManager.getAllClients()).forEach(client => {
-            if (client.id !== ws.id)
-            {
-                client.send(JSON.stringify(messageToSend));
-            }
-        });
+        // 廣播給所有 client（包含自己）
+        ClientManager.broadcast(messageToSend);
     }
     // 處理歷史訊息查詢
     else if (obj.type === "get-history" && obj.channelId) {

@@ -24,6 +24,18 @@ export const useChat = () => {
         userName: sender ? sender.name : msg.fromId,
       };
       setMessages(prev => [...prev, newMessage]);
+    } else if (msg.type === 'system-message') {
+      const textChannels = ['chat1', 'chat2', 'chat3'];
+      const newMessages: Message[] = textChannels.map(channelId => ({
+        type: 'system-message',
+        id: `system-${Date.now()}`,
+        text: msg.text,
+        timestamp: new Date(msg.timestamp),
+        channelId,
+        userId: 'system',
+        userName: 'System',
+      }));
+      setMessages(prev => [...prev, ...newMessages]);
     }
   }, [connectedUsers]);
 
@@ -52,7 +64,11 @@ export const useChat = () => {
           userId: msg.fromId,
           userName: msg.fromId,
         }));
-        setMessages(historyMessages);
+        setMessages(prev => {
+          // 避免重複，保留 system-message
+          const systemMessages = prev.filter(m => m.type === 'system-message');
+          return [...historyMessages, ...systemMessages];
+        });
       });
     }
     return () => {
@@ -74,10 +90,12 @@ export const useChat = () => {
         id: Date.now().toString(),
         text: input,
         timestamp: new Date(),
-        channelId: activeChannel
+        channelId: activeChannel,
+        userId: myId,
+        userName: myId,
       };
       wsSendMessage && wsSendMessage(newMessage);
-      setMessages(prev => [...prev, newMessage]);
+      //setMessages(prev => [...prev, newMessage]);
       setInput('');
     }
   };
