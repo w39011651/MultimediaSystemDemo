@@ -16,5 +16,10 @@ module.exports = {
     },
     getAllClients() {
         return clients;
+    },
+    broadcast(message) {
+        Object.values(clients).forEach(ws => {
+            ws.send(JSON.stringify(message));
+        });
     }
 };
