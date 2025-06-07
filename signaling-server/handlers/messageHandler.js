@@ -36,10 +36,10 @@ module.exports = function(ws, data) {
                 });
                 
                 Object.values(ClientManager.getAllClients()).forEach(client => {
-                    if (client.id !== ws.id)
-                    {
+                    //if (client.id !== ws.id)
+                    //{
                         client.send(JSON.stringify(messageToSend));
-                    }
+                    //}
                 });
             }
             break;
@@ -66,12 +66,13 @@ module.exports = function(ws, data) {
             }
 
         default:
-            if (obj.toId && ClientManager.getClient(obj.toId)) {//WebRTC part
+            if (obj.toId && typeof obj.toId === 'string' && ClientManager.getClient(obj.toId)) {
                 ClientManager.getClient(obj.toId).send(JSON.stringify({ ...obj, fromId: ws.id }));
                 logger.info(`Message sent from ${ws.id} to ${obj.toId}`);
-            } else {
+            } else if (obj.toId) {
                 logger.warn(`Client ${obj.toId} not found`);
             }
+            // 其他訊息直接忽略
             break;
     }
 };

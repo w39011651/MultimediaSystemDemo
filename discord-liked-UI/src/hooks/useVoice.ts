@@ -1,10 +1,10 @@
 import { VOICE_EVENT_TYPES } from "../constant/events";
 import { useState, useCallback, useEffect } from 'react';
-import { useWebSocket } from './useWebSocket';
+import { useWebSocketContext } from "./WebSocketProvider";
 import type { User } from '../types';
 
 export const useVoice = () => {
-    const { myId, sendMessage, setVoiceMessageHandler } = useWebSocket();
+    const { myId, sendMessage, setVoiceMessageHandler } = useWebSocketContext();
     const [activeVoiceChannelId, setActiveVoiceChannelId] = useState<string | null>(null);
     const [voiceChannelMembers, setVoiceChannelMembers] = useState<Record<string, User[]>>({}); // { channelId: [User, User, ...] }
 
