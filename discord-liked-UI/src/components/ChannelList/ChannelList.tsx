@@ -33,6 +33,12 @@ const handleChannelClick = (channelId: string, type: 'text' | 'voice') => {
   }
 };
 
+  // DEBUG: Log voice state from useVoice
+  console.log('[ChannelList] activeVoiceChannelId:', activeVoiceChannelId);
+  console.log('[ChannelList] voiceChannelMembers:', voiceChannelMembers);
+
+  // ... handleChannelClick ...
+
   return (
     <div style={{ width: '240px', background: '#1e1f22', padding: '16px', color: '#8e9297', display: 'flex', flexDirection: 'column' }}>
       <div style={{ marginBottom: '20px' }}>

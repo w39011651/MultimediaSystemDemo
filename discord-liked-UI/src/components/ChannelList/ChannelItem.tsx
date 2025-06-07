@@ -40,18 +40,25 @@ export const ChannelItem: React.FC<ChannelItemProps> = ({
         // 可以根據圖標類型調整樣式，例如 emoji 大小
     };
 
+    if (channel.type === 'voice') {
+        console.log(`[ChannelItem] Voice Channel: ${channel.name}`);
+        console.log(`  - isActive: ${isActive}`);
+        console.log(`  - usersInChannel:`, usersInChannel);
+        console.log(`  - Should render user list: ${channel.type === 'voice' && isActive && usersInChannel && usersInChannel.length > 0}`);
+    }
+
     return (
     <>
         <li
             style={getChannelStyle()}
             onClick={() => onClick(channel.id, channel.type)}
             onMouseEnter={(e) => {
-                if ((!isActive && channel.type === 'text') || (isActive && channel.type === 'voice')) {
+                if (!((isActive && channel.type === 'text') || (isActive && channel.type === 'voice'))) {
                     e.currentTarget.style.backgroundColor = '#40444b';
                 }
             }}
             onMouseLeave={(e) => {
-                if ((!isActive && channel.type === 'text') || (isActive && channel.type === 'voice') ) {
+                if (!((isActive && channel.type === 'text') || (isActive && channel.type === 'voice'))) {
                     e.currentTarget.style.backgroundColor = 'transparent';
                 }
             }}

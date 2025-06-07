@@ -1,5 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { User } from '../types';
+import { VOICE_EVENT_TYPES } from '../constant/events';
+
+const isVoiceEventType = (type: string): boolean => {
+    return Object.values(VOICE_EVENT_TYPES).includes(type as typeof VOICE_EVENT_TYPES[keyof typeof VOICE_EVENT_TYPES]);
+};
 
 export const useWebSocket = () => {
     const [isConnected, setIsConnected] = useState(false);
@@ -41,12 +46,31 @@ export const useWebSocket = () => {
                     name: msg.id,
                     status: 'online' as 'online' | 'offline' | 'away'
                 };
-                setUsers(prev => [...prev, newUser]);
-                console.log('新使用者加入:', msg.id);
+                setUsers(prev => {
+                    if(prev.find(u => u.id === newUser.id))return prev;
+                    return [...prev, newUser];
+                });
+                
+                console.log('[useWebSocket] 新使用者加入 (全域):', msg.id);
             } else if (msg.type === "text-message") {
                 if (textMessageCallbackRef.current) {
+                    console.log('[useWebSocket] Forwarding text message to textMessageCallbackRef');
                     textMessageCallbackRef.current(msg);
+                } else {
+                    console.warn('[useWebSocket] textMessageCallbackRef is null, cannot process text message:', msg);
                 }
+            } else if (msg.type === "user-left") {
+                setUsers(prev => prev.filter(user => user.id !== msg.id));
+                console.log('[useWebSocket] 使用者離開 (全域):', msg.id);
+            } else if (isVoiceEventType(msg.type)) { // <--- 新增：判斷是否為語音事件
+                if (voiceMessageHandlerRef.current) {
+                    console.log(`[useWebSocket] Forwarding voice message (type: ${msg.type}) to voiceMessageHandlerRef`);
+                    voiceMessageHandlerRef.current(msg);
+                } else {
+                    console.warn(`[useWebSocket] voiceMessageHandlerRef is null, cannot process voice message (type: ${msg.type}):`, msg);
+                }
+            } else {
+                console.warn('[useWebSocket] 未處理的訊息類型:', msg.type, msg);
             }
         };
 
@@ -67,19 +91,25 @@ export const useWebSocket = () => {
         };
     }, []);
 
-    const sendMessage = (message: any) => {
+    const sendMessage = useCallback((message: any) => { // 將 sendMessage 包在 useCallback 中
         if (ws.current && ws.current.readyState === WebSocket.OPEN) {
             ws.current.send(JSON.stringify(message));
+        } else {
+            console.error('[useWebSocket] WebSocket is not open. Cannot send message:', message);
         }
-    };
+    }, []); // sendMessage 通常不需要依賴項，除非它內部使用了會變的狀態或 props
 
     // 新增函數讓其他 hook 註冊文字訊息回呼
-    const setTextMessageCallback = (callback: ((message: any) => void) | null) => {
+    const setTextMessageCallback = useCallback((callback: ((message: any) => void) | null) => {
+        console.log('[useWebSocket] setTextMessageCallback called');
         textMessageCallbackRef.current = callback;
-    };
-    const setVoiceMessageHandler = (callback : ((message: any) => void) | null ) => {
+    }, []);
+
+    
+    const setVoiceMessageHandler = useCallback((callback : ((message: any)=>void | null)) => {
+        console.log('[useWebSocket] setVoiceMessageHandler called');
         voiceMessageHandlerRef.current = callback;
-    };
+    }, []);
 
     return {
         isConnected,
