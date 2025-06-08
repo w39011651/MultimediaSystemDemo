@@ -51,8 +51,77 @@ const initialVoiceChannels: Channel[] = [
 ];
 
 const URL: string = 'ws://localhost:8080';
+// Provide empty array and object constants
+const STABLE_EMPTY_ARRAY: User[] = [];
+const STABLE_EMPTY_VOICE_MEMBERS: Record<string, User[]> = {};
 
 export const useWebSocketStore = create<WebSocketState>((set, get) => ({
+  ws: null,
+  isConnected: false, // 初始為 false
+  myId: 'test-static-id', // 靜態 ID
+  users: STABLE_EMPTY_ARRAY,
+  textChannels: [ // 靜態頻道數據
+    { id: 'chat1', name: 'General Text', type: 'text' },
+    { id: 'chat2', name: 'Random Text', type: 'text' },
+  ],
+  voiceChannels: [ // 靜態頻道數據
+    { id: 'voice1', name: 'General Voice', type: 'voice' },
+    { id: 'voice2', name: 'Gaming Voice', type: 'voice' },
+  ],
+  messagesByChannel: {},
+  activeTextChannelId: 'chat1', // 靜態
+  activeVoiceChannelId: null,  // 靜態
+  voiceChannelMembers: STABLE_EMPTY_VOICE_MEMBERS,
+  isConnecting: false,
+
+  connect: () => {
+    console.log('[Store - Simplified] connect called');
+    // 暫時不做任何 WebSocket 連線
+    // set({ isConnected: true, isConnecting: false }); // 可以模擬連接成功
+  },
+  disconnect: () => {
+    console.log('[Store - Simplified] disconnect called');
+    // set({ isConnected: false, ws: null, activeVoiceChannelId: null, voiceChannelMembers: STABLE_EMPTY_VOICE_MEMBERS });
+  },
+  sendMessage: (message: any) => {
+    console.log('[Store - Simplified] sendMessage called with:', message);
+  },
+  setActiveTextChannel: (channelId: string) => {
+    console.log('[Store - Simplified] setActiveTextChannel called with:', channelId);
+    set({ activeTextChannelId: channelId });
+  },
+  addTextMessage: (_message: Message) => {
+    // no-op for simplified store
+  },
+  loadHistoryMessages: (_channelId: string, _messages: Message[]) => {
+    // no-op for simplified store
+  },
+  joinVoiceChannel: (channelId: string) => {
+    console.log('[Store - Simplified] joinVoiceChannel called with:', channelId);
+    // set({ activeVoiceChannelId: channelId });
+  },
+  leaveCurrentVoiceChannel: () => {
+    console.log('[Store - Simplified] leaveCurrentVoiceChannel called');
+    // set({ activeVoiceChannelId: null, voiceChannelMembers: STABLE_EMPTY_VOICE_MEMBERS });
+  },
+  _handleVoiceMessage: (_msg: any) => {
+    // no-op for simplified store
+  },
+  _handleOpen: () => {
+    // no-op for simplified store
+  },
+  _handleMessage: (_event: MessageEvent) => {
+    // no-op for simplified store
+  },
+  _handleClose: () => {
+    // no-op for simplified store
+  },
+  _handleError: (_event: Event) => {
+    // no-op for simplified store
+  },
+}));
+
+const useWebSocketStore2 = create<WebSocketState>((set, get) => ({
     ws: null,
     isConnected: false,
     myId: null,
@@ -72,17 +141,40 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     */
     connect: () => 
     {
-        if (get().ws && get().isConnected)
+        console.log('[Store] Attempting to connect WebSocket...');
+        // if (get().ws && get().isConnected) // 這個條件可能不夠，因為 ws 可能存在但 isConnected 是 false
+        if (get().ws && get().ws.readyState === WebSocket.OPEN && get().isConnected) // 更嚴格的檢查
         {
-            console.log('[Store] WebSocket already connected.');
+            console.log('[Store] WebSocket already connected and ws instance exists.');
             return;
         }
+        if (get().ws) 
+        { // 如果 ws 實例存在，無論其狀態如何，先關閉它
+            console.log('[Store] Existing ws instance found. Closing it before creating a new one. ReadyState:', get().ws.readyState);
+            get().ws.close();
+            // set({ ws: null }); // 可以在這裡立即設為 null，或依賴 onclose
+        }
         const wsInstance = new WebSocket(URL);
-        wsInstance.onopen = () => get()._handleOpen();
+        console.log('[Store] New WebSocket instance created:', wsInstance);
+        wsInstance.onopen = () => 
+        {
+            console.log('[Store] WebSocket onopen event triggered.');
+            get()._handleOpen();
+        }
+
         wsInstance.onmessage = (event) => get()._handleMessage(event);
-        wsInstance.onclose = () => get()._handleClose();
-        wsInstance.onerror = (event) => get()._handleError(event);
+        wsInstance.onclose = () => 
+        {
+            console.log('[Store] WebSocket onclose event triggered. Code:', event.code, 'Reason:', event.reason, 'wasClean:', event.wasClean);
+            get()._handleClose();
+        }
+        wsInstance.onerror = (event) => 
+        {
+            console.error('[Store] WebSocket onerror event triggered:', event);
+            get()._handleError(event);
+        }
         set({ ws:wsInstance });
+        console.log('[Store] ws instance set in store.');
     },
     
     /*useWebSocketStore.disconnect: 對應 useEffect 清理函數中的 ws.current.close()。*/
@@ -113,7 +205,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     */
     _handleOpen: () => 
     {
-        console.log('[Store] WebSocket connected.');
+        console.log('[Store] _handleOpen: WebSocket connected. Setting isConnected to true.');
         set({ isConnected: true });
         // 連線成功後，可以發送初始請求，例如獲取預設頻道的歷史訊息
         const activeTextChannel = get().activeTextChannelId;
@@ -128,7 +220,7 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     */
     _handleClose: () => 
     {
-        console.log('[Store] WebSocket disconnected.');
+        console.warn('[Store] _handleClose: WebSocket disconnected. Setting isConnected to false and ws to null.');
         set({ isConnected: false, ws: null, activeVoiceChannelId: null, voiceChannelMembers: {} });
     },
 
@@ -137,8 +229,9 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
     */
     _handleError: (event: any) => 
     {
-        console.error('[Store] WebSocket error:', event);
+        console.error('[Store] _handleError: WebSocket error occurred.', event);
         // 可以在這裡觸發一些錯誤處理邏輯        
+        set ({ isConnected: false});
     },
 
     /**
@@ -385,6 +478,15 @@ export const useWebSocketStore = create<WebSocketState>((set, get) => ({
      */
     joinVoiceChannel: (channelId) => 
     {
+        if (!get().isConnected)
+        {
+            console.warn("[Store] WebSocket not connected. Cannot join voice channel:", channelId);
+            // 如果未連接，則不執行後續的樂觀更新和訊息發送
+            // 這樣可以避免在 WebSocket 明顯斷開時，activeVoiceChannelId 仍然被樂觀設定，
+            // 然後立即被 _handleClose 重置，從而可能避免更新迴圈。
+            return;
+        }
+
         const currentActiveVoiceChannelId = get().activeVoiceChannelId;
         const myUserId = get().myId;
 

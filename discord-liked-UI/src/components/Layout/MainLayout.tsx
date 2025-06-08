@@ -24,6 +24,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   sendMessage,
   switchChannel, // 新增
 }) => {
+  console.log('[MainLayout] Component execution started'); // <--- 新增日誌
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw' }}>
       <ChannelList
