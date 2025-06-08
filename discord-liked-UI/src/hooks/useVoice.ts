@@ -1,11 +1,26 @@
 import { VOICE_EVENT_TYPES } from "../constant/events";
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useWebSocketContext } from "./WebSocketProvider";
 import type { User } from '../types';
+
+const peerConnections: Record<string, RTCPeerConnection> = {};
 
 export const useVoice = () => {
     const { myId, sendMessage, setVoiceMessageHandler, voiceChannelMembers, setVoiceChannelMembers } = useWebSocketContext();
     const [activeVoiceChannelId, setActiveVoiceChannelId] = useState<string | null>(null);
+
+    // 本地音訊串流
+    const localStreamRef = useRef<MediaStream | null>(null);
+    // 遠端音訊串流（可用 state 管理多個 user）
+    const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
+
+    // 取得本地音訊（只取得一次）
+    const getLocalAudioStream = async () => {
+        if (!localStreamRef.current) {
+            localStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+        return localStreamRef.current;
+    };
 
     const handleVoiceMessage = useCallback((msg: any) => {
         console.log("[useVoice] Received voice message in handleVoiceMessage:", msg);
@@ -28,6 +43,49 @@ export const useVoice = () => {
                          console.log(`[useVoice] VOICE_CHANNEL_STATUS: Updating activeVoiceChannelId from ${activeVoiceChannelId} to ${msg.channelId} based on server confirmation.`);
                          setActiveVoiceChannelId(msg.channelId);
                     }
+
+                    // 對每個其他 user 建立 WebRTC offer
+                    msg.users.forEach(async (u: { userId: string, userName: string }) => {
+                        if (u.userId !== myId && !peerConnections[u.userId]) {
+                            const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+                            peerConnections[u.userId] = pc;
+
+                            // 接收遠端音訊
+                            pc.ontrack = (event) => {
+                                setRemoteStreams(prev => ({
+                                    ...prev,
+                                    [u.userId]: event.streams[0]
+                                }));
+                                // 你可以加 log
+                                console.log('[WebRTC] 收到遠端音訊流:', event.streams[0]);
+                            };
+
+                            // 加入本地音訊
+                            const localStream = await getLocalAudioStream();
+                            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+                            pc.onicecandidate = (event) => {
+                                if (event.candidate) {
+                                    sendMessage({
+                                        type: "candidate",
+                                        toId: u.userId,
+                                        fromId: myId,
+                                        candidate: event.candidate
+                                    });
+                                }
+                            };
+
+                            // 建立 offer
+                            const offer = await pc.createOffer();
+                            await pc.setLocalDescription(offer);
+                            sendMessage({
+                                type: "offer",
+                                toId: u.userId,
+                                fromId: myId,
+                                sdp: offer
+                            });
+                        }
+                    });
                 }
                 break;
             case VOICE_EVENT_TYPES.VOICE_USER_JOINED: // 其他使用者加入目前所在的語音頻道
@@ -67,6 +125,16 @@ export const useVoice = () => {
                         console.log("[useVoice] VOICE_USER_LEFT: New voiceChannelMembers state (inside setter):", newState);
                         return newState;
                     });
+                    // 關閉與該 user 的 peerConnection
+                    if (peerConnections[msg.userId]) {
+                        peerConnections[msg.userId].close();
+                        delete peerConnections[msg.userId];
+                    }
+                    setRemoteStreams(prev => {
+                        const newStreams = { ...prev };
+                        delete newStreams[msg.userId];
+                        return newStreams;
+                    });
                     if (msg.userId === myId && msg.channelId === activeVoiceChannelId) {
                         console.log(`[useVoice] VOICE_USER_LEFT: Current user left active channel. Setting activeVoiceChannelId to null.`);
                         setActiveVoiceChannelId(null);
@@ -75,10 +143,71 @@ export const useVoice = () => {
                     console.warn("[useVoice] VOICE_USER_LEFT: Missing channelId or userId in message:", msg);
                 }
                 break;
+            case VOICE_EVENT_TYPES.OFFER: {
+                const fromId = msg.fromId;
+                if (!peerConnections[fromId]) {
+                    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+                    peerConnections[fromId] = pc;
+
+                    // 接收遠端音訊
+                    pc.ontrack = (event) => {
+                        setRemoteStreams(prev => ({
+                            ...prev,
+                            [fromId]: event.streams[0]
+                        }));
+                        // 你可以加 log
+                        console.log('[WebRTC] 收到遠端音訊流:', event.streams[0]);
+                    };
+
+                    // 加入本地音訊
+                    getLocalAudioStream().then(localStream => {
+                        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                    });
+
+                    pc.onicecandidate = (event) => {
+                        if (event.candidate) {
+                            sendMessage({
+                                type: "candidate",
+                                toId: fromId,
+                                fromId: myId,
+                                candidate: event.candidate
+                            });
+                        }
+                    };
+                }
+                const pc = peerConnections[fromId];
+                pc.setRemoteDescription(new RTCSessionDescription(msg.sdp)).then(async () => {
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    sendMessage({
+                        type: "answer",
+                        toId: fromId,
+                        fromId: myId,
+                        sdp: answer
+                    });
+                });
+                break;
+            }
+            case VOICE_EVENT_TYPES.ANSWER: {
+                const fromId = msg.fromId;
+                const pc = peerConnections[fromId];
+                if (pc) {
+                    pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                }
+                break;
+            }
+            case VOICE_EVENT_TYPES.CANDIDATE: {
+                const fromId = msg.fromId;
+                const pc = peerConnections[fromId];
+                if (pc && msg.candidate) {
+                    pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+                }
+                break;
+            }
             default:
                 console.warn('[useVoice] Unhandled voice message type:', msg.type);
         }
-    }, [myId, activeVoiceChannelId, setActiveVoiceChannelId, setVoiceChannelMembers]);
+    }, [myId, activeVoiceChannelId, setActiveVoiceChannelId, setVoiceChannelMembers, sendMessage]);
 
     useEffect(() => {
         if (setVoiceMessageHandler) {
@@ -131,8 +260,19 @@ export const useVoice = () => {
 
     const leaveCurrentVoiceChannel = useCallback(() => {
         if (activeVoiceChannelId && sendMessage) {
+            // 關閉所有 peerConnection
+            Object.values(peerConnections).forEach(pc => pc.close());
+            Object.keys(peerConnections).forEach(key => delete peerConnections[key]);
+            // 停止本地音訊串流
+            if (localStreamRef.current) {
+                localStreamRef.current.getTracks().forEach(track => track.stop());
+                localStreamRef.current = null;
+            }
+            // 清空遠端音訊
+            setRemoteStreams({});
+
             sendMessage({
-                type: 'leave-voice', // 使用 VOICE_EVENT_TYPES.LEAVE_VOICE
+                type: VOICE_EVENT_TYPES.LEAVE_VOICE,
                 payload: { channelId: activeVoiceChannelId },
             });
             setActiveVoiceChannelId(null); // 樂觀更新
@@ -142,7 +282,7 @@ export const useVoice = () => {
                 return newState;
             });
         }
-    }, [activeVoiceChannelId, sendMessage, setActiveVoiceChannelId, setActiveVoiceChannelId, setVoiceChannelMembers]);
+    }, [activeVoiceChannelId, sendMessage, setActiveVoiceChannelId, setVoiceChannelMembers]);
 
     useEffect(() => {
         console.log("[useVoice] activeVoiceChannelId changed:", activeVoiceChannelId);
@@ -157,5 +297,7 @@ export const useVoice = () => {
         voiceChannelMembers,
         joinVoiceChannel,
         leaveCurrentVoiceChannel,
+        localStream: localStreamRef.current,
+        remoteStreams, // 用 state 版本
     };
 };

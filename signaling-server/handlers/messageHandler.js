@@ -65,7 +65,7 @@ module.exports = function(ws, data) {
         });
             }
 
-        default:
+        default: //sdp offer/answer/candidate
             if (obj.toId && typeof obj.toId === 'string' && ClientManager.getClient(obj.toId)) {
                 ClientManager.getClient(obj.toId).send(JSON.stringify({ ...obj, fromId: ws.id }));
                 logger.info(`Message sent from ${ws.id} to ${obj.toId}`);

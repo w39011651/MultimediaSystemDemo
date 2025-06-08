@@ -5,6 +5,7 @@ const handleMessage = require('./handlers/messageHandler');
 const logger = require('./utils/logger');
 const EVENT = require('./constants/events');
 const RoomManager = require('./managers/RoomManager');
+const roomHandler = require('./handlers/roomHandler');
 
 const wsServer = new WebSocket.Server({port: config.PORT});
 logger.info(`Server started on ws://localhost:${config.PORT}`);
@@ -62,5 +63,6 @@ wsServer.on('connection', (ws) => {
         });
 
         ClientManager.broadcast({ type: EVENT.USER_LEFT, id, message: `(${id} 已離開聊天室)`});
+        roomHandler.broadcastVoiceChannelMembers();
     });
 });
