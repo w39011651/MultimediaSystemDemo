@@ -4,27 +4,65 @@ const ClientManager = require('./managers/ClientManager');
 const handleMessage = require('./handlers/messageHandler');
 const logger = require('./utils/logger');
 const EVENT = require('./constants/events');
+const RoomManager = require('./managers/RoomManager');
+const roomHandler = require('./handlers/roomHandler');
 
 const wsServer = new WebSocket.Server({port: config.PORT});
 logger.info(`Server started on ws://localhost:${config.PORT}`);
 
 wsServer.on('connection', (ws) => {
-        //建立client id
-        console.log("Connection in.");
+    console.log("Connection in.");
+    const id = ClientManager.addClient(ws);
+    const userList = Object.keys(ClientManager.getAllClients()).filter(uid => uid !== id);
 
-        const id = ClientManager.addClient(ws);
-        const userList = Object.keys(ClientManager.getAllClients()).filter(uid => uid !== id);
-        ws.send(JSON.stringify({ type: EVENT.WELCOME, id, userList }));
+    // 新增：取得所有語音頻道成員
+    const allVoiceChannelMembers = {};
+    const voiceChannelIds = ['voice1', 'voice2'];
+    voiceChannelIds.forEach(cid => {
+        // 這裡回傳的是 [{id, name}, ...]
+        allVoiceChannelMembers[cid] = RoomManager.getUsersInVoiceChannel(cid);
+    });
 
-        ClientManager.broadcast({ type: EVENT.USER_JOINED, id });
+    //console.log('WELCOME allVoiceChannelMembers:', allVoiceChannelMembers);
+    ws.send(JSON.stringify({
+        type: EVENT.WELCOME,
+        id,
+        userList,
+        voiceChannelMembers: allVoiceChannelMembers
+    }));
 
-        ws.on("message", (data)=>
-        {
-            handleMessage(ws, data);
+    ClientManager.broadcast({
+        type: EVENT.USER_JOINED,
+        id,
+        message: `(${id} 已加入聊天室)`
+    });
+
+    ws.on("message", (data)=>
+    {
+        handleMessage(ws, data);
+    });
+
+    ws.on('close', () => 
+    {
+        ClientManager.removeClient(ws);
+        //使用者斷線後，廣播通知其斷線
+        const leftVoiceChannels = RoomManager.removeUserFromAllVoiceChannels(id);
+        leftVoiceChannels.forEach(info => {
+            const remainingUsers = RoomManager.getUsersInVoiceChannel(info.channelId);
+            remainingUsers.forEach(user => {
+                const clientSocket = ClientManager.getClient(user.id);
+                if (clientSocket) {
+                    clientSocket.send(JSON.stringify({
+                        type: EVENT.VOICE_USER_LEFT,
+                        channelId: info.channelId,
+                        userId: id,
+                        userName: info.userName || id
+                    }));
+                }
+            });
         });
 
-        ws.on('close', () => {
-                ClientManager.removeClient(ws);
-            });
-
+        ClientManager.broadcast({ type: EVENT.USER_LEFT, id, message: `(${id} 已離開聊天室)`});
+        roomHandler.broadcastVoiceChannelMembers();
     });
+});
