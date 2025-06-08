@@ -14,6 +14,8 @@ export const useWebSocket = () => {
     const textMessageCallbackRef = useRef<(message: any) => void | null>(null);
     const historyCallbackRef = useRef<(messages: any[]) => void | null>(null);
     const voiceMessageHandlerRef = useRef<(message: any) => void | null>(null);
+    const messageBuffer = useRef<any[]>([]); // 新增訊息暫存
+    const [voiceChannelMembers, setVoiceChannelMembers] = useState<Record<string, User[]>>({});
 
     useEffect(() => {
         // 連接 WebSocket
@@ -36,6 +38,7 @@ export const useWebSocket = () => {
             if (msg.type === "welcome") {
                 setMyId(msg.id);
                 console.log('我的 ID:', msg.id, '現有用戶:', msg.userList);
+                //console.log('[前端] welcome.voiceChannelMembers:', msg.voiceChannelMembers);
                 
                 // 將 userList 轉換為 User 物件
                 const userObjects: User[] = msg.userList.map((userId: string) => ({
@@ -44,6 +47,19 @@ export const useWebSocket = () => {
                     status: 'online' as 'online' | 'offline' | 'away'
                 }));
                 setUsers(userObjects);
+
+                if (msg.voiceChannelMembers) {
+                    // msg.voiceChannelMembers: { [channelId]: {id, name}[] }
+                    const members: Record<string, User[]> = {};
+                    Object.entries(msg.voiceChannelMembers).forEach(([cid, users]) => {
+                        members[cid] = (users as any[]).map(u => ({
+                            id: u.id,
+                            name: u.name,
+                            status: 'online'
+                        }));
+                    });
+                    setVoiceChannelMembers(members);
+                }
                 
             } else if (msg.type === "user-joined") {
                 // 新使用者加入
@@ -89,7 +105,9 @@ export const useWebSocket = () => {
                     console.log('[useWebSocket] Forwarding text message to textMessageCallbackRef');
                     textMessageCallbackRef.current(msg);
                 } else {
-                    console.warn('[useWebSocket] textMessageCallbackRef is null, cannot process text message:', msg);
+                    // 暫存訊息
+                    messageBuffer.current.push(msg);
+                    console.warn('[useWebSocket] textMessageCallbackRef is null, message buffered:', msg);
                 }
             } else if (isVoiceEventType(msg.type)) { // <--- 新增：判斷是否為語音事件
                 if (voiceMessageHandlerRef.current) {
@@ -102,6 +120,16 @@ export const useWebSocket = () => {
                 if (historyCallbackRef.current) {
                     historyCallbackRef.current(msg.messages);
                 }
+            } else if (msg.type === "VOICE_CHANNEL_MEMBERS_UPDATE") {
+                const members: Record<string, User[]> = {};
+                Object.entries(msg.voiceChannelMembers).forEach(([cid, users]) => {
+                    members[cid] = (users as any[]).map(u => ({
+                        id: u.id,
+                        name: u.name,
+                        status: 'online'
+                    }));
+                });
+                setVoiceChannelMembers(members);
             } else {
                 console.warn('[useWebSocket] 未處理的訊息類型:', msg.type, msg);
             }
@@ -133,10 +161,13 @@ export const useWebSocket = () => {
         }
     }, []); // sendMessage 通常不需要依賴項，除非它內部使用了會變的狀態或 props
 
-    // 新增函數讓其他 hook 註冊文字訊息回呼
+    // 註冊 callback 時，把暫存訊息全部處理掉
     const setTextMessageCallback = useCallback((callback: ((message: any) => void) | null) => {
-        console.log('[useWebSocket] setTextMessageCallback called');
         textMessageCallbackRef.current = callback;
+        if (callback && messageBuffer.current.length > 0) {
+            messageBuffer.current.forEach(msg => callback(msg));
+            messageBuffer.current = [];
+        }
     }, []);
 
     
@@ -157,6 +188,8 @@ export const useWebSocket = () => {
         sendMessage,
         setTextMessageCallback,
         setVoiceMessageHandler,
-        setHistoryCallback
+        setHistoryCallback,
+        voiceChannelMembers,
+        setVoiceChannelMembers,
     };
 };

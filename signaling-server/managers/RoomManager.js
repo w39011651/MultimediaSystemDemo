@@ -11,6 +11,7 @@ module.exports = {
         if (!voiceChannelMembers[channelId][userId]) {
             voiceChannelMembers[channelId][userId] = { id: userId, name: userName || userId };
             logger.info(`User ${userId} (${userName}) joined voice channel ${channelId}`);
+            //console.log('[RoomManager] voiceChannelMembers:', JSON.stringify(voiceChannelMembers));
             return true; // 表示成功加入或已在頻道中
         }
         logger.info(`User ${userId} (${userName}) was already in voice channel ${channelId}`);

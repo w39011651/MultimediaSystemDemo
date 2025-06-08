@@ -1,14 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Message } from '../types/index.ts';
-import { useWebSocket } from './useWebSocket';
+import type { Message, User } from '../types/index.ts';
+import { useWebSocketContext } from './WebSocketProvider';
 
 export const useChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [activeChannel, setActiveChannel] = useState<string>('chat1');
 
-  // 這裡要從 useWebSocket 取得 setHistoryCallback
-  const { sendMessage: wsSendMessage, myId, setTextMessageCallback, setHistoryCallback, users: connectedUsers } = useWebSocket();
+  //// 這裡要從 useWebSocket 取得 setHistoryCallback
+  //const { sendMessage: wsSendMessage, myId, setTextMessageCallback, setHistoryCallback, users: connectedUsers } = useWebSocket();
+
+  // 這裡改成用 context
+  const { isConnected, sendMessage: wsSendMessage, myId, setTextMessageCallback, setHistoryCallback, users: connectedUsers } = useWebSocketContext() as {
+    isConnected: boolean,
+    sendMessage: any,
+    myId: string,
+    setTextMessageCallback: any,
+    setHistoryCallback: any,
+    users: User[]
+  };
 
   // 處理收到的文字訊息的回呼函數
   const handleIncomingMessage = useCallback((msg: any) => {
@@ -78,10 +88,10 @@ export const useChat = () => {
 
   // 每次切換頻道時自動請求歷史訊息
   useEffect(() => {
-    if (wsSendMessage && activeChannel) {
+    if (isConnected && wsSendMessage && activeChannel) {
       wsSendMessage({ type: "get-history", channelId: activeChannel });
     }
-  }, [wsSendMessage, activeChannel]);
+  }, [isConnected, wsSendMessage, activeChannel]);
 
   const sendMessage = () => {
     if (input.trim() && myId) {

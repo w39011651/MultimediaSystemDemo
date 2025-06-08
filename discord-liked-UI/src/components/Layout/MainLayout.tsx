@@ -2,7 +2,6 @@ import React from 'react';
 import { ChannelList } from '../ChannelList/ChannelList';
 import { ChatArea } from '../ChatArea/ChatArea';
 import type { Message, Channel } from '../../types';
-import { text } from 'stream/consumers';
 
 interface MainLayoutProps {
   textChannels: Channel[];
@@ -12,6 +11,7 @@ interface MainLayoutProps {
   activeChannel: string;
   setInput: (value: string) => void;
   sendMessage: () => void;
+  switchChannel: (channelId: string) => void; // 新增
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
@@ -22,12 +22,15 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   activeChannel,
   setInput,
   sendMessage,
+  switchChannel, // 新增
 }) => {
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw' }}>
       <ChannelList
         textChannels={textChannels}
         voiceChannels={voiceChannels}
+        activeChannel={activeChannel} // 新增
+        switchChannel={switchChannel} // 新增
       />
       <ChatArea
         messages={messages}

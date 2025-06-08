@@ -1,22 +1,24 @@
 import React from 'react';
 import type {Channel, User} from '../../types/index.ts';
 import { ChannelItem } from './ChannelItem';
-import { useChat } from '../../hooks/useChat.ts';
 import { useVoice } from '../../hooks/useVoice.ts';
 
 interface ChannelListProps {
   textChannels: Channel[];
   voiceChannels: Channel[];
+  activeChannel: string; // 新增
+  switchChannel: (channelId: string) => void; // 新增
 }
 
 export const ChannelList: React.FC<ChannelListProps> = ({
   textChannels,
   voiceChannels,
+  activeChannel,
+  switchChannel,
 }) => {
-  const { activeChannel: activeTextChannel, switchChannel } = useChat();
-  const { 
-    activeVoiceChannelId, 
-    voiceChannelMembers, 
+  const {
+    activeVoiceChannelId,
+    voiceChannelMembers,
     joinVoiceChannel,
     leaveCurrentVoiceChannel,
   } = useVoice();
@@ -48,7 +50,7 @@ const handleChannelClick = (channelId: string, type: 'text' | 'voice') => {
             <ChannelItem
               key={channel.id}
               channel={channel}
-              isActive={channel.id === activeTextChannel}
+              isActive={channel.id === activeChannel}
               onClick={handleChannelClick}
             />
           ))}
@@ -62,7 +64,7 @@ const handleChannelClick = (channelId: string, type: 'text' | 'voice') => {
               key={channel.id}
               channel={channel}
               isActive={channel.id === activeVoiceChannelId}
-              usersInChannel={channel.id === activeVoiceChannelId ? voiceChannelMembers[channel.id] : undefined}
+              usersInChannel={voiceChannelMembers[channel.id]}
               onClick={handleChannelClick}
             />
           ))}

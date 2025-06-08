@@ -1,10 +1,11 @@
 import { MainLayout } from './components/Layout/MainLayout';
 import { useChat } from './hooks/useChat';
+import { WebSocketProvider } from './hooks/WebSocketProvider';
 import type { Channel } from './types';
 import './App.css';
-import { text } from 'stream/consumers';
+//import { text } from 'stream/consumers';
 
-function App() {
+function AppContent() {
   const chatHook = useChat();
   const allChannels: Channel[] = [
     { id: 'chat1', name: 'Chat 1', type: 'text' },
@@ -19,6 +20,14 @@ function App() {
   
 
   return <MainLayout {...chatHook} textChannels={textChannels} voiceChannels={voiceChannels} />;
+}
+
+function App() {
+  return (
+    <WebSocketProvider>
+      <AppContent />
+    </WebSocketProvider>
+  );
 }
 
 export default App;
