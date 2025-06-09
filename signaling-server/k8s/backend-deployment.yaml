@@ -1,0 +1,42 @@
+# k8s/backend-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: signaling-server-deployment
+spec:
+  replicas: 2 # 運行 2 個實例，確保服務穩定
+  selector:
+    matchLabels:
+      app: signaling-server
+  template:
+    metadata:
+      labels:
+        app: signaling-server
+    spec:
+      containers:
+      - name: server
+        # 請務必換成您上傳的後端映像路徑
+        image: asia-east1-docker.pkg.dev/atp-prediction-460115/signaling-server-repo/signaling-server:v1.0.2
+        ports:
+        - containerPort: 8080 # 容器內部監聽的埠號
+        # --- 健康檢查 ---
+        livenessProbe:
+          httpGet:
+            path: /healthz # 檢查您在 server.js 中設定的健康檢查路徑
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        # --- 資源配置 ---
+        resources:
+          requests:
+            memory: "96Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

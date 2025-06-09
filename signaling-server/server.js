@@ -6,9 +6,29 @@ const logger = require('./utils/logger');
 const EVENT = require('./constants/events');
 const RoomManager = require('./managers/RoomManager');
 const roomHandler = require('./handlers/roomHandler');
+const { Http2ServerRequest } = require('http2');
+const http = require('http');
 
-const wsServer = new WebSocket.Server({port: config.PORT});
+// 1. 建立一個標準的 HTTP 伺服器
+const server = http.createServer((req, res) => {
+    // 這裡可以處理非 WebSocket 的請求
+    // 例如，一個簡單的健康檢查端點
+    if (req.url === '/healthz') {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('OK');
+    } else {
+        res.writeHead(404);
+        res.end('Not Found');
+    }
+});
+
+const wsServer = new WebSocket.Server({ server });
 logger.info(`Server started on ws://localhost:${config.PORT}`);
+
+server.listen(config.PORT, () => {
+    logger.info(`Server started on ws://localhost:${config.PORT}`);
+    logger.info(`HTTP server listening on port ${config.PORT}`);
+});
 
 wsServer.on('connection', (ws) => {
     console.log("Connection in.");

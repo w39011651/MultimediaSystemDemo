@@ -1,0 +1,28 @@
+# k8s/frontend-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-ui-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend-ui
+  template:
+    metadata:
+      labels:
+        app: frontend-ui
+    spec:
+      containers:
+      - name: ui
+        # 請務必換成您上傳的前端映像路徑
+        image: asia-east1-docker.pkg.dev/atp-prediction-460115/signaling-server-repo/frontend-ui:v1.0.3
+        ports:
+        - containerPort: 80 # Nginx 預設監聽的埠號
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"

@@ -1,0 +1,24 @@
+# k8s/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: discord-demo-ingress
+spec:
+  # 預設規則：所有未匹配到的流量都交給前端服務
+  defaultBackend:
+    service:
+      name: frontend-ui-service
+      port:
+        number: 80
+  rules:
+  - http:
+      paths:
+      # 當請求路徑是 /ws 或 /ws/... 時，轉發到後端服務
+      # 這是我們為 WebSocket 連線指定的特殊路徑
+      - path: /ws
+        pathType: Prefix
+        backend:
+          service:
+            name: signaling-server-service
+            port:
+              number: 8080

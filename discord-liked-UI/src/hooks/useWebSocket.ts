@@ -6,6 +6,21 @@ const isVoiceEventType = (type: string): boolean => {
     return Object.values(VOICE_EVENT_TYPES).includes(type as typeof VOICE_EVENT_TYPES[keyof typeof VOICE_EVENT_TYPES]);
 };
 
+const DEV_SERVER_URL = import.meta.env.VITE_WEBSOCKET_URL;
+
+function getProductionServerUrl(): string
+{
+    const protocol = window.location.protocol;
+
+    const wsProtocol = protocol === 'https' ? 'wss' : 'ws';
+
+    const host = window.location.host;
+
+    return `${wsProtocol}://${host}/ws`;
+}
+
+const SERVER_URL = DEV_SERVER_URL ? DEV_SERVER_URL : getProductionServerUrl();
+
 export const useWebSocket = () => {
     const [isConnected, setIsConnected] = useState(false);
     const [myId, setMyId] = useState<string>('');
@@ -19,8 +34,8 @@ export const useWebSocket = () => {
 
     useEffect(() => {
         // 連接 WebSocket
-        ws.current = new WebSocket('ws://localhost:8080');
-        
+        ws.current = new WebSocket(SERVER_URL);
+        console.log(SERVER_URL);
         ws.current.onopen = () => {
             console.log('已連上 signaling server');
             setIsConnected(true);

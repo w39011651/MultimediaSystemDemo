@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  signaling-server:
+    build:
+      context: ./signaling-server
+    container_name: signaling-server
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+  
+  frontend-ui:
+    build:
+      context: ./discord-liked-UI
+    container_name: frontend-ui
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+    depends_on:
+      - signaling-server
+    environment:
+      - VITE_WEBSOCKET_URL=ws://localhost:8080

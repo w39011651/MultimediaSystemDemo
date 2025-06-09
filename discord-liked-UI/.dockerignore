@@ -1,0 +1,6 @@
+# discord-liked-UI/.dockerignore
+node_modules
+dist
+.env
+.git
+.gitignore
