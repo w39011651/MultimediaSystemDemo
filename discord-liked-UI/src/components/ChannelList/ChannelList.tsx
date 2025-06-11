@@ -1,13 +1,21 @@
 import React, { useState } from 'react';
-import type {Channel} from '../../types/index.ts';
+import type { Channel } from '../../types/index.ts';
 import { ChannelItem } from './ChannelItem';
-import { useVoice } from '../../hooks/useVoice.ts';
 
+// 1. 擴充 props 型別，加入語音/視訊相關
 interface ChannelListProps {
   textChannels: Channel[];
   voiceChannels: Channel[];
-  activeChannel: string; // 新增
-  switchChannel: (channelId: string) => void; // 新增
+  activeChannel: string;
+  switchChannel: (channelId: string) => void;
+  // 語音/視訊 props
+  activeVoiceChannelId?: string | null;
+  voiceChannelMembers?: Record<string, any>;
+  joinVoiceChannel?: (channelId: string) => void;
+  leaveCurrentVoiceChannel?: () => void;
+  remoteStreams?: Record<string, MediaStream>;
+  isCameraOn?: boolean;
+  toggleCamera?: () => void;
 }
 
 export const ChannelList: React.FC<ChannelListProps> = ({
@@ -15,27 +23,22 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   voiceChannels,
   activeChannel,
   switchChannel,
+  activeVoiceChannelId,
+  voiceChannelMembers,
+  joinVoiceChannel,
+  leaveCurrentVoiceChannel,
+  remoteStreams,
+  isCameraOn,
+  toggleCamera,
 }) => {
-  const {
-    activeVoiceChannelId,
-    voiceChannelMembers,
-    joinVoiceChannel,
-    leaveCurrentVoiceChannel,
-    remoteStreams, // 取得 remoteStreams
-  } = useVoice();
-
   // 新增 state 控制 tooltip
   const [hoveredBtn, setHoveredBtn] = useState<null | 'video' | 'hangup'>(null);
 
-  // --- 模擬資料結束 ---
   const handleChannelClick = (channelId: string, type: 'text' | 'voice') => {
     if (type === 'text') {
       switchChannel(channelId);
-      // 如果使用者在語音頻道中，點擊文字頻道不應該自動離開語音頻道
-      // 若要實作離開語音頻道，需明確呼叫 leaveCurrentVoiceChannel()
     } else if (type === 'voice') {
-      // 之後會使用 useVoice 的 joinVoiceChannel
-      joinVoiceChannel(channelId);
+      joinVoiceChannel && joinVoiceChannel(channelId);
     }
   };
 
@@ -81,7 +84,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 key={channel.id}
                 channel={channel}
                 isActive={channel.id === activeVoiceChannelId}
-                usersInChannel={voiceChannelMembers[channel.id]}
+                usersInChannel={voiceChannelMembers?.[channel.id]}
                 onClick={handleChannelClick}
               />
             ))}
@@ -122,7 +125,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
               }}
               onMouseEnter={() => setHoveredBtn('video')}
               onMouseLeave={() => setHoveredBtn(null)}
-              onClick={() => alert('開啟視訊功能尚未實作')}
+              onClick={toggleCamera}
             >
               <span role="img" aria-label="video">📷</span>
             </button>
@@ -140,7 +143,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                 whiteSpace: 'nowrap',
                 zIndex: 10
               }}>
-                開啟/關閉視訊鏡頭
+                {isCameraOn ? '關閉視訊鏡頭' : '開啟視訊鏡頭'}
               </div>
             )}
           </div>
@@ -196,7 +199,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           </div>
         </div>
       )}
-
       {/* === 新增：遠端音訊播放區塊 === */}
       {remoteStreams && Object.entries(remoteStreams).map(([peerId, stream]) =>
         stream ? (
@@ -207,7 +209,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             }}
             autoPlay
             controls
-            style={{ display: 'none' }} // 隱藏音訊控制
+            style={{ display: 'none' }}
           />
         ) : null
       )}
