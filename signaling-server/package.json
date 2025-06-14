@@ -13,6 +13,7 @@
   "description": "",
   "dependencies": {
     "dotenv": "^16.5.0",
+    "redis": "^5.5.6",
     "sqlite3": "^5.1.7",
     "winston": "^3.17.0",
     "ws": "^8.18.2"
