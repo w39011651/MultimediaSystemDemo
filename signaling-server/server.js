@@ -67,10 +67,12 @@ subscriber().subscribe(REDIS_CHANNEL_NAME, (redisMessage) => {
                 case EVENT.OFFER:
                 case EVENT.ANSWER:
                 case EVENT.CANDIDATE:
-                    // WebRTC 信令需要發送給特定的 targetUserId
-                    // 這裡需要判斷 current client.id 是否為 payload.targetUserId
-                    if (client.id === payload.targetUserId) {
+                    // WebRTC 信令需要發送給特定的 toId
+                    // 這裡需要判斷 current client.id 是否為 payload.toId
+                    console.log("payload.toId:", payload.toId, "client.id:", client.id);
+                    if (client.id === payload.toId) {
                         messageToSend = { type: eventType, ...payload };
+                        console.log("Sending WebRTC signaling message:", messageToSend);
                     } else {
                         // 如果不是目標用戶，則不發送此信令
                         return;

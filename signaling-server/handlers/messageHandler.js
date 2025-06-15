@@ -4,6 +4,7 @@ const db = require('../utils/db');
 const EVENT = require('../constants/events');
 const roomHandler = require('./roomHandler');
 const { publisher } = require('../utils/redisClient'); // 引入 Redis publisher 
+const WebSocket = require('ws');
 
 // 定義 Redis Pub/Sub 頻道名稱，與 server.js 中的頻道名稱一致 
 const REDIS_CHANNEL_NAME = 'chat_messages';
@@ -63,20 +64,21 @@ module.exports = function(ws, data, clientId) { // 接收 clientId 參數
 
             case EVENT.GET_HISTORY: // 獲取歷史訊息，這是單點回覆，不需要 Redis 
                 if (obj.channelId) {
-                    db.getMessages(obj.channelId, (err, rows) => {
-                        if (err) {
+                    db.getMessages(obj.channelId)
+                        .then(rows => {
+                            ws.send(JSON.stringify({ type: "history", channelId: obj.channelId, messages: rows }));
+                        })
+                        .catch(err => {
                             logger.error("查詢歷史訊息失敗", err);
                             ws.send(JSON.stringify({ type: "history", channelId: obj.channelId, messages: [] }));
-                        } else {
-                            ws.send(JSON.stringify({ type: "history", channelId: obj.channelId, messages: rows }));
-                        }
-                    });
+                        });
                 }
                 break; // 確保有 break，防止 fall-through 
 
             default: // SDP offer/answer/candidate (WebRTC 信令)
                 // WebRTC 信令通常是點對點 (peer-to-peer) 的，需要轉發給特定的 toId 
-                // 如果 targetId 在當前 Pod 上，則直接轉發 
+                // 如果 targetId 在當前 Pod 上，則直接轉發
+                console.log(`[SDP Message] 收到 WebRTC 信令: ${obj.type} from ${ws.id}`, obj);
                 if (obj.toId && typeof obj.toId === 'string') {
                     const targetClient = ClientManager.getClient(obj.toId);
                     if (targetClient && targetClient.readyState === WebSocket.OPEN) {
