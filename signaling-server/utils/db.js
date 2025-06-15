@@ -1,36 +1,34 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const mysql = require('mysql2/promise');
 
-const db = new sqlite3.Database(path.join(__dirname, '../chat.db'));
-
-// 建立訊息表格
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      channelId TEXT,
-      fromId TEXT,
-      text TEXT,
-      timestamp TEXT
-    )
-  `);
+const pool = mysql.createPool({
+  host: '104.199.252.51',
+  user: 'sql',
+  password: 'password',
+  database: 'chat_db'
 });
 
-function saveMessage({ channelId, fromId, text, timestamp }) {
-  db.run(
-    `INSERT INTO messages (channelId, fromId, text, timestamp) VALUES (?, ?, ?, ?)`,
-    [channelId, fromId, text, timestamp]
-  );
+function toMySQLDatetime(dateString) {
+  const d = new Date(dateString);
+  return d.toISOString().slice(0, 19).replace('T', ' ');
 }
 
-function getMessages(channelId, callback) {
-  db.all(
-    `SELECT * FROM messages WHERE channelId = ? ORDER BY id ASC`,
-    [channelId],
-    (err, rows) => {
-      callback(err, rows);
+module.exports = {
+  async saveMessage({ channelId, fromId, text, timestamp }) {
+    try {
+      await pool.query(
+        'INSERT INTO messages (channel_id, from_id, text, timestamp) VALUES (?, ?, ?, ?)',
+        [channelId, fromId, text, toMySQLDatetime(timestamp)]
+      );
+    } catch (err) {
+      console.error('[db.saveMessage] error:', err);
     }
-  );
-}
+  },
 
-module.exports = { saveMessage, getMessages };
+  async getMessages(channelId){
+    const sql = 'SELECT id, from_id AS fromID, channel_id as channelID, text, timestamp FROM messages WHERE channel_id = ? ORDER BY timestamp ASC';
+    //const [rows] = await pool.query('SELECT * FROM messages ORDER BY id DESC LIMIT 5');
+    const [rows] = await pool.execute(sql, [channelId]);
+    console.log('Recent messages:', rows);
+    return rows;
+  }
+};

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChannelList } from '../ChannelList/ChannelList';
 import { ChatArea } from '../ChatArea/ChatArea';
+import { useVoice } from '../../hooks/useVoice'; // 新增
 import type { Message, Channel } from '../../types';
 
 interface MainLayoutProps {
@@ -11,7 +12,7 @@ interface MainLayoutProps {
   activeChannel: string;
   setInput: (value: string) => void;
   sendMessage: () => void;
-  switchChannel: (channelId: string) => void; // 新增
+  switchChannel: (channelId: string) => void;
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
@@ -22,15 +23,19 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   activeChannel,
   setInput,
   sendMessage,
-  switchChannel, // 新增
+  switchChannel,
 }) => {
+  // 只在這裡呼叫 useVoice，並將所有語音/視訊狀態傳給子元件
+  const voice = useVoice();
+
   return (
     <div style={{ display: 'flex', height: '100vh', width: '100vw' }}>
       <ChannelList
         textChannels={textChannels}
         voiceChannels={voiceChannels}
-        activeChannel={activeChannel} // 新增
-        switchChannel={switchChannel} // 新增
+        activeChannel={activeChannel}
+        switchChannel={switchChannel}
+        {...voice} // 傳遞語音/視訊狀態與方法
       />
       <ChatArea
         messages={messages}
@@ -38,6 +43,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         activeChannel={activeChannel}
         onInputChange={setInput}
         onSendMessage={sendMessage}
+        {...voice} // 傳遞語音/視訊狀態與方法
       />
     </div>
   );

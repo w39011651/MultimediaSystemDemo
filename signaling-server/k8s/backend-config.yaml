@@ -1,0 +1,13 @@
+# k8s/backend-config.yaml
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: websocket-backendconfig
+spec:
+  timeoutSec: 86400 # 設定超時時間為 1 天 (24 * 60 * 60)
+  # --- 新增這一段 ---
+  # 自訂 Ingress 的健康檢查
+  healthCheck:
+    type: HTTP
+    requestPath: /healthz  # 告訴負載平衡器要檢查這個路徑
+    port: 8080             # 檢查後端容器的 8080 埠

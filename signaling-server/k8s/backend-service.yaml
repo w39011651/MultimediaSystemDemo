@@ -1,0 +1,16 @@
+# k8s/backend-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: signaling-server-service
+  annotations:
+    # 關聯 BackendConfig，以支援 WebSocket 長連線
+    cloud.google.com/backend-config: '{"default": "websocket-backendconfig"}'
+spec:
+  type: ClusterIP # 只在叢集內部暴露，由 Ingress 代理
+  selector:
+    app: signaling-server
+  ports:
+  - protocol: TCP
+    port: 8080 # Service 監聽的埠號
+    targetPort: 8080 # 轉發到容器的埠號

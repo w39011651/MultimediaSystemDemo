@@ -7,5 +7,6 @@ export const VOICE_EVENT_TYPES = {
     OFFER: 'offer', // Client to Server (offer)
     ANSWER: 'answer', // Server to Client (answer)
     CANDIDATE: 'candidate', // Client to Server (ICE candidate)
+    VOICE_CHANNEL_MEMBERS_UPDATE: 'VOICE_CHANNEL_MEMBERS_UPDATE', // Server to Client (voice channel members update)
 };
 

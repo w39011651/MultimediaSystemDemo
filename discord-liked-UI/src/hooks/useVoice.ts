@@ -13,6 +13,10 @@ export const useVoice = () => {
     const localStreamRef = useRef<MediaStream | null>(null);
     // 遠端音訊串流（可用 state 管理多個 user）
     const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
+    // 本地視訊串流
+    const localVideoStreamRef = useRef<MediaStream | null>(null);
+    const [remoteVideoStreams, setRemoteVideoStreams] = useState<Record<string, MediaStream>>({});
+
 
     // 取得本地音訊（只取得一次）
     const getLocalAudioStream = async () => {
@@ -20,6 +24,13 @@ export const useVoice = () => {
             localStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
         return localStreamRef.current;
+    };
+    // 取得本地視訊流
+    const getLocalVideoStream = async () => {
+        if (!localVideoStreamRef.current) {
+            localVideoStreamRef.current = await navigator.mediaDevices.getUserMedia({ video: true });
+        }
+        return localVideoStreamRef.current;
     };
 
     const handleVoiceMessage = useCallback((msg: any) => {
@@ -52,13 +63,36 @@ export const useVoice = () => {
 
                             // 接收遠端音訊
                             pc.ontrack = (event) => {
-                                setRemoteStreams(prev => ({
-                                    ...prev,
-                                    [u.userId]: event.streams[0]
-                                }));
+                                if (event.track.kind === 'video') {
+                                    // 監聽 track ended 事件
+                                    event.track.onended = () => {
+                                        setRemoteVideoStreams(prev => {
+                                            const newStreams = { ...prev };
+                                            delete newStreams[u.userId]; // 或 fromId
+                                            return newStreams;
+                                        });
+                                    };
+                                    setRemoteVideoStreams(prev => ({
+                                        ...prev,
+                                        [u.userId]: event.streams[0]
+                                    }));
+                                } else if (event.track.kind === 'audio') {
+                                    setRemoteStreams(prev => ({
+                                        ...prev,
+                                        [u.userId]: event.streams[0]
+                                    }));
+                                }
                                 // 你可以加 log
                                 console.log('[WebRTC] 收到遠端音訊流:', event.streams[0]);
                             };
+
+                            // 這段要放在 addTrack 之前
+                            pc.addTransceiver('video', { direction: 'recvonly' }); // 讓自己可以收視訊
+
+                            // 如果自己有開鏡頭，再加 video track
+                            if (localVideoStreamRef.current) {
+                                localVideoStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localVideoStreamRef.current!));
+                            }
 
                             // 加入本地音訊
                             const localStream = await getLocalAudioStream();
@@ -107,12 +141,48 @@ export const useVoice = () => {
                             return prev; // 使用者已存在，不更新
                         }
                         const updatedUsers = [...currentChannelUsers, newUser];
-                        const newState = { ...prev, [msg.channelId]: updatedUsers };
-                        console.log("[useVoice] VOICE_USER_JOINED: New voiceChannelMembers state (inside setter):", newState);
-                        return newState;
+                        return { ...prev, [msg.channelId]: updatedUsers };
                     });
-                } else {
-                    console.warn("[useVoice] VOICE_CHANNEL_STATUS: Missing channelId or users in message:", msg);
+
+                    // === 新增：如果新 user 不是自己，主動建立 peerConnection 並發 offer ===
+                    if (msg.userId !== myId && !peerConnections[msg.userId]) {
+                        const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+                        peerConnections[msg.userId] = pc;
+
+                        // 設定 ontrack
+                        pc.ontrack = (event) => {
+                            if (event.track.kind === 'video') {
+                                // 監聽 track ended 事件
+                                event.track.onended = () => {
+                                    setRemoteVideoStreams(prev => {
+                                        const newStreams = { ...prev };
+                                        delete newStreams[msg.userId]; // 或 fromId
+                                        return newStreams;
+                                    });
+                                };
+                                setRemoteVideoStreams(prev => ({
+                                    ...prev,
+                                    [msg.userId]: event.streams[0]
+                                }));
+                            } else if (event.track.kind === 'audio') {
+                                setRemoteStreams(prev => ({
+                                    ...prev,
+                                    [msg.userId]: event.streams[0]
+                                }));
+                            }
+                        };
+
+                        pc.onicecandidate = (event) => {
+                            if (event.candidate) {
+                                sendMessage({
+                                    type: "candidate",
+                                    toId: msg.userId,
+                                    fromId: myId,
+                                    candidate: event.candidate
+                                });
+                            }
+                        };
+                    }
                 }
                 break;
             case VOICE_EVENT_TYPES.VOICE_USER_LEFT: // 其他使用者離開目前所在的語音頻道
@@ -131,6 +201,11 @@ export const useVoice = () => {
                         delete peerConnections[msg.userId];
                     }
                     setRemoteStreams(prev => {
+                        const newStreams = { ...prev };
+                        delete newStreams[msg.userId];
+                        return newStreams;
+                    });
+                    setRemoteVideoStreams(prev => {
                         const newStreams = { ...prev };
                         delete newStreams[msg.userId];
                         return newStreams;
@@ -159,10 +234,25 @@ export const useVoice = () => {
                         console.log('[WebRTC] 收到遠端音訊流:', event.streams[0]);
                     };
 
+                    // 這段要放在 addTrack 之前
+                    pc.addTransceiver('video', { direction: 'recvonly' }); // 讓自己可以收視訊
+
+                    // 如果自己有開鏡頭，再加 video track
+                    if (localVideoStreamRef.current) {
+                        localVideoStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localVideoStreamRef.current!));
+                    }
+
                     // 加入本地音訊
-                    getLocalAudioStream().then(localStream => {
-                        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-                    });
+                    if (localStreamRef.current) {
+                        localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current!));
+                    } else {
+                        // 若 audio 尚未取得，先取得再加
+                        getLocalAudioStream().then(localStream => {
+                            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                        });
+                    }
+
+
 
                     pc.onicecandidate = (event) => {
                         if (event.candidate) {
@@ -192,7 +282,12 @@ export const useVoice = () => {
                 const fromId = msg.fromId;
                 const pc = peerConnections[fromId];
                 if (pc) {
-                    pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                    if (pc.signalingState === "have-local-offer") {
+                        pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                    }
+                    else {
+                        console.warn("Skip setRemoteDescription(answer): signalingState=", pc.signalingState);
+                    }
                 }
                 break;
             }
@@ -204,6 +299,23 @@ export const useVoice = () => {
                 }
                 break;
             }
+            case "camera-off":
+                if (peerConnections[msg.fromId]) {
+                    peerConnections[msg.fromId].close();
+                    delete peerConnections[msg.fromId];
+                }
+                setRemoteVideoStreams(prev => {
+                    const newStreams = { ...prev };
+                    delete newStreams[msg.fromId];
+                    return newStreams;
+                });
+                break;
+            case "camera-on":
+                // 可選：收到 camera-on 時可重新協商 offer
+                break;
+            case VOICE_EVENT_TYPES.VOICE_CHANNEL_MEMBERS_UPDATE:
+                setVoiceChannelMembers(msg.members);
+                break;
             default:
                 console.warn('[useVoice] Unhandled voice message type:', msg.type);
         }
@@ -226,7 +338,7 @@ export const useVoice = () => {
             console.log(`Already in voice channel: ${channelId}`);
             return; // 已經在該頻道
         }
-
+        leaveCurrentVoiceChannel();
         // 如果已在其他語音頻道，先發送離開訊息
         if (activeVoiceChannelId && sendMessage) {
             sendMessage({
@@ -258,8 +370,73 @@ export const useVoice = () => {
         }
     }, [activeVoiceChannelId, sendMessage, myId, setActiveVoiceChannelId, setVoiceChannelMembers]);
 
+    // 新增：開關鏡頭
+    const [isCameraOn, setIsCameraOn] = useState(false);
+    const toggleCamera = useCallback(async () => {
+        if (!isCameraOn) {
+            // 開啟鏡頭
+            const videoStream = await getLocalVideoStream();
+            setIsCameraOn(true);
+            // 加到所有 peerConnection
+            Object.entries(peerConnections).forEach(async ([userId, pc]) => {
+                videoStream.getVideoTracks().forEach(track => {
+                    pc.addTrack(track, videoStream);
+                });
+                // 重新協商
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                sendMessage({
+                    type: "offer",
+                    toId: userId,
+                    fromId: myId,
+                    sdp: offer
+                });
+            });
+            // 新增：通知所有 peer 我已開啟鏡頭
+            Object.keys(peerConnections).forEach(userId => {
+                sendMessage({
+                    type: "camera-on",
+                    toId: userId,
+                    fromId: myId
+                });
+            });
+        } else {
+            // 關閉鏡頭
+            if (localVideoStreamRef.current) {
+                localVideoStreamRef.current.getTracks().forEach(track => track.stop());
+                localVideoStreamRef.current = null;
+            }
+            setIsCameraOn(false);
+            // 通知所有 peerConnection 移除 video track
+            Object.entries(peerConnections).forEach(async ([userId, pc]) => {
+                pc.getSenders().forEach(sender => {
+                    if (sender.track && sender.track.kind === 'video') {
+                        pc.removeTrack(sender);
+                    }
+                });
+                // 重新協商
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                sendMessage({
+                    type: "offer",
+                    toId: userId,
+                    fromId: myId,
+                    sdp: offer
+                });
+            });
+            // 新增：通知所有 peer 我已關閉鏡頭
+            Object.keys(peerConnections).forEach(userId => {
+                sendMessage({
+                    type: "camera-off",
+                    toId: userId,
+                    fromId: myId
+                });
+            });
+        }
+    }, [isCameraOn, sendMessage, myId]);
+
+    // 離開語音頻道時清理
     const leaveCurrentVoiceChannel = useCallback(() => {
-        if (activeVoiceChannelId && sendMessage) {
             // 關閉所有 peerConnection
             Object.values(peerConnections).forEach(pc => pc.close());
             Object.keys(peerConnections).forEach(key => delete peerConnections[key]);
@@ -268,20 +445,32 @@ export const useVoice = () => {
                 localStreamRef.current.getTracks().forEach(track => track.stop());
                 localStreamRef.current = null;
             }
-            // 清空遠端音訊
+            // 停止本地視訊
+            if (localVideoStreamRef.current) {
+                localVideoStreamRef.current.getTracks().forEach(track => track.stop());
+                localVideoStreamRef.current = null;
+            }
             setRemoteStreams({});
+            setRemoteVideoStreams(prev => {
+                Object.values(prev).forEach(stream => {
+                    if (stream) stream.getTracks().forEach(track => track.stop());
+                });
+                return {};
+            });
+            setIsCameraOn(false);
 
-            sendMessage({
-                type: VOICE_EVENT_TYPES.LEAVE_VOICE,
-                payload: { channelId: activeVoiceChannelId },
-            });
-            setActiveVoiceChannelId(null); // 樂觀更新
-            setVoiceChannelMembers((prev: Record<string, User[]>) => { // 清理該頻道的成員
-                const newState = {...prev};
-                delete newState[activeVoiceChannelId];
-                return newState;
-            });
-        }
+            if (activeVoiceChannelId && sendMessage) {
+                sendMessage({
+                    type: VOICE_EVENT_TYPES.LEAVE_VOICE,
+                    payload: { channelId: activeVoiceChannelId },
+                });
+                setActiveVoiceChannelId(null);
+                setVoiceChannelMembers((prev: Record<string, User[]>) => {
+                    const newState = { ...prev };
+                    delete newState[activeVoiceChannelId];
+                    return newState;
+                });
+            }
     }, [activeVoiceChannelId, sendMessage, setActiveVoiceChannelId, setVoiceChannelMembers]);
 
     useEffect(() => {
@@ -299,5 +488,9 @@ export const useVoice = () => {
         leaveCurrentVoiceChannel,
         localStream: localStreamRef.current,
         remoteStreams, // 用 state 版本
+        localVideoStream: localVideoStreamRef.current,
+        remoteVideoStreams,
+        isCameraOn,
+        toggleCamera,
     };
 };

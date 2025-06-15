@@ -6,6 +6,14 @@ const isVoiceEventType = (type: string): boolean => {
     return Object.values(VOICE_EVENT_TYPES).includes(type as typeof VOICE_EVENT_TYPES[keyof typeof VOICE_EVENT_TYPES]);
 };
 
+function getServerUrl(): string {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    return `${protocol}//${host}/ws`;
+}
+
+const SERVER_URL = getServerUrl();
+
 export const useWebSocket = () => {
     const [isConnected, setIsConnected] = useState(false);
     const [myId, setMyId] = useState<string>('');
@@ -19,8 +27,8 @@ export const useWebSocket = () => {
 
     useEffect(() => {
         // 連接 WebSocket
-        ws.current = new WebSocket('ws://localhost:8080');
-        
+        ws.current = new WebSocket(SERVER_URL);
+        console.log(SERVER_URL);
         ws.current.onopen = () => {
             console.log('已連上 signaling server');
             setIsConnected(true);
@@ -136,8 +144,8 @@ export const useWebSocket = () => {
 
         }; 
 
-        ws.current.onclose = () => {
-            console.log('WebSocket 連線關閉');
+        ws.current.onclose = (event) => {
+            console.log('WebSocket 連線關閉', event);
             setIsConnected(false);
         };
 

@@ -1,7 +1,11 @@
 const EVENT = require('../constants/events');
-const RoomManager = require('../managers/RoomManager');
+const RoomManager = require('../managers/RoomManager'); // 本地管理語音頻道狀態 
 const logger = require('../utils/logger');
-const ClientManager = require('../managers/ClientManager');
+const ClientManager = require('../managers/ClientManager'); // 用於獲取特定客戶端 socket (不再用於廣播) 
+const { publisher } = require('../utils/redisClient'); // 引入 Redis publisher 
+
+// 定義 Redis Pub/Sub 頻道名稱，與 server.js 和 messageHandler.js 中的頻道名稱一致 
+const REDIS_CHANNEL_NAME = 'chat_messages';
 
 function handleJoinVoice(ws, payload){
     const clientId = ws.id;
@@ -9,105 +13,115 @@ function handleJoinVoice(ws, payload){
 
     if (!payload || !payload.channelId){
         logger.warn(`Client ${clientId} tried to join voice without channelId.`);
-        ws.send(JSON.stringify({type: 'error', message: 'channelId is required for join-voice.'}));
+        try {
+            ws.send(JSON.stringify({type: 'error', message: 'channelId is required for join-voice.'}));
+        } catch (e) {
+            logger.error('[handleJoinVoice] ws.send error:', e);
+        }
         return;
     }
     const { channelId } = payload;
 
-    const currentVoiceChannel = RoomManager.getUserCurrentVoiceChannel(clientId);
-    if (currentVoiceChannel && currentVoiceChannel !== channelId) {
-        RoomManager.leaveVoiceChannel(currentVoiceChannel, clientId);
-
-        const oldChannelUsers = RoomManager.getUserCurrentVoiceChannel(currentVoiceChannel);
-        if (oldChannelUsers)//房間還有人才廣播
-        {
-            oldChannelUsers.forEach(userInOldChannel => {
-            const clientSocket = ClientManager.getClient(userInOldChannel.id);
-            if (clientSocket && clientSocket.id !== clientId) {
-                clientSocket.send(JSON.stringify({
-                    type: EVENT.VOICE_USER_LEFT,
-                    channelId: currentVoiceChannel,
-                    userId: clientId,
-                    userName: clientName
+    try {
+        const currentVoiceChannel = RoomManager.getUserCurrentVoiceChannel(clientId);
+        if (currentVoiceChannel && currentVoiceChannel !== channelId) {
+            RoomManager.leaveVoiceChannel(currentVoiceChannel, clientId);
+            try {
+                publisher().publish(REDIS_CHANNEL_NAME, JSON.stringify({
+                    eventType: EVENT.VOICE_USER_LEFT,
+                    payload: { channelId: currentVoiceChannel, userId: clientId, userName: clientName },
+                    originalSenderWsId: clientId
                 }));
-            }
-            })
-        }
-    }   
-
-    RoomManager.joinVoiceChannel(channelId, clientId, clientName);
-    const usersInChannel = RoomManager.getUsersInVoiceChannel(channelId).map(u => ({ userId: u.id, userName: u.name }));
-
-    // 回傳給加入者，告知頻道狀態和成員列表
-    ws.send(JSON.stringify({
-        type: EVENT.VOICE_CHANNEL_STATUS,
-        channelId: channelId,
-        users: usersInChannel
-    }));
-
-    // 廣播給該語音頻道的其他成員，告知新使用者加入
-    usersInChannel.forEach(user => {
-        if (user.userId !== clientId) {
-            const clientSocket = ClientManager.getClient(user.userId);
-            if (clientSocket) {
-                clientSocket.send(JSON.stringify({
-                    type: EVENT.VOICE_USER_JOINED,
-                    channelId: channelId,
-                    userId: clientId,
-                    userName: clientName
-                }));
+                logger.info(`User ${clientId} left old voice channel ${currentVoiceChannel} (via switch).`);
+            } catch (e) {
+                logger.error('[handleJoinVoice] publish VOICE_USER_LEFT error:', e);
             }
         }
-    });
-    broadcastVoiceChannelMembers();
-    logger.info(`User ${clientId} (${clientName}) joined voice channel ${channelId}`);
+
+        RoomManager.joinVoiceChannel(channelId, clientId, clientName);
+        const usersInChannel = RoomManager.getUsersInVoiceChannel(channelId).map(u => ({ userId: u.id, userName: u.name }));
+
+        try {
+            ws.send(JSON.stringify({
+                type: EVENT.VOICE_CHANNEL_STATUS,
+                channelId: channelId,
+                users: usersInChannel
+            }));
+        } catch (e) {
+            logger.error('[handleJoinVoice] ws.send VOICE_CHANNEL_STATUS error:', e);
+        }
+
+        try {
+            publisher().publish(REDIS_CHANNEL_NAME, JSON.stringify({
+                eventType: EVENT.VOICE_USER_JOINED,
+                payload: { channelId: channelId, userId: clientId, userName: clientName },
+                originalSenderWsId: clientId
+            }));
+            logger.info(`User ${clientId} (${clientName}) joined voice channel ${channelId}. Published to Redis.`);
+        } catch (e) {
+            logger.error('[handleJoinVoice] publish VOICE_USER_JOINED error:', e);
+        }
+
+        broadcastVoiceChannelMembers();
+    } catch (e) {
+        logger.error('[handleJoinVoice] error:', e, payload);
+    }
 }
 
 function handleLeaveVoice(ws, payload) {
     const clientId = ws.id;
-    const clientName = clientId; // 暫時使用 ID 作為名稱
+    const clientName = clientId;
 
     if (!payload || !payload.channelId) {
         logger.warn(`Client ${clientId} tried to leave voice without channelId.`);
-        ws.send(JSON.stringify({ type: 'error', message: 'channelId is required for leave-voice.' }));
+        try {
+            ws.send(JSON.stringify({ type: 'error', message: 'channelId is required for leave-voice.' }));
+        } catch (e) {
+            logger.error('[handleLeaveVoice] ws.send error:', e);
+        }
         return;
     }
     const { channelId } = payload;
-    const { userWasInChannel, userName } = RoomManager.leaveVoiceChannel(channelId, clientId);
+    try {
+        const { userWasInChannel, userName } = RoomManager.leaveVoiceChannel(channelId, clientId);
 
-    if (userWasInChannel) {
-        // 廣播給該語音頻道的其他成員，告知使用者離開
-        const remainingUsers = RoomManager.getUsersInVoiceChannel(channelId);
-        remainingUsers.forEach(user => {
-            const clientSocket = ClientManager.getClient(user.id);
-            if (clientSocket) {
-                clientSocket.send(JSON.stringify({
-                    type: EVENT.VOICE_USER_LEFT,
-                    channelId: channelId,
-                    userId: clientId,
-                    userName: userName || clientName
+        if (userWasInChannel) {
+            try {
+                publisher().publish(REDIS_CHANNEL_NAME, JSON.stringify({
+                    eventType: EVENT.VOICE_USER_LEFT,
+                    payload: { channelId: channelId, userId: clientId, userName: userName || clientName },
+                    originalSenderWsId: clientId
                 }));
+                logger.info(`User ${clientId} (${userName || clientName}) left voice channel ${channelId}. Published to Redis.`);
+            } catch (e) {
+                logger.error('[handleLeaveVoice] publish VOICE_USER_LEFT error:', e);
             }
-        });
-        logger.info(`User ${clientId} (${userName || clientName}) left voice channel ${channelId}`);
-        // 可以選擇性地回傳給離開者確認
-        // ws.send(JSON.stringify({ type: 'you_left_voice_confirmation', channelId }));
-    } else {
-        logger.warn(`User ${clientId} tried to leave voice channel ${channelId} but was not in it or channel did not exist.`);
+        } else {
+            logger.warn(`User ${clientId} tried to leave voice channel ${channelId} but was not in it or channel did not exist.`);
+        }
+        broadcastVoiceChannelMembers();
+    } catch (e) {
+        logger.error('[handleLeaveVoice] error:', e, payload);
     }
-    broadcastVoiceChannelMembers();
 }
 
 function broadcastVoiceChannelMembers() {
-    const allVoiceChannelMembers = {};
-    const voiceChannelIds = ['voice1', 'voice2'];
-    voiceChannelIds.forEach(cid => {
-        allVoiceChannelMembers[cid] = RoomManager.getUsersInVoiceChannel(cid);
-    });
-    ClientManager.broadcast({
-        type: 'VOICE_CHANNEL_MEMBERS_UPDATE',
-        voiceChannelMembers: allVoiceChannelMembers
-    });
+    try {
+        const allVoiceChannelMembers = {};
+        const voiceChannelIds = ['voice1', 'voice2'];
+        voiceChannelIds.forEach(cid => {
+            allVoiceChannelMembers[cid] = RoomManager.getUsersInVoiceChannel(cid);
+        });
+
+        publisher().publish(REDIS_CHANNEL_NAME, JSON.stringify({
+            eventType: EVENT.VOICE_CHANNEL_MEMBERS_UPDATE,
+            payload: { members: allVoiceChannelMembers },
+            originalSenderWsId: null
+        }));
+        logger.info("Published VOICE_CHANNEL_MEMBERS_UPDATE to Redis.");
+    } catch (e) {
+        logger.error('[broadcastVoiceChannelMembers] error:', e);
+    }
 }
 
 module.exports = {
