@@ -76,7 +76,8 @@ export const useChat = () => {
         }));
         setMessages(prev => {
           // 避免重複，保留 system-message
-          const systemMessages = prev.filter(m => m.type === 'system-message');
+          console.log('[useChat] 接收到歷史訊息', msgs, activeChannel);
+          const systemMessages = prev.filter(m => m.type === 'system-message' && m.channelId === activeChannel);
           return [...historyMessages, ...systemMessages];
         });
       });
@@ -89,6 +90,7 @@ export const useChat = () => {
   // 每次切換頻道時自動請求歷史訊息
   useEffect(() => {
     if (isConnected && wsSendMessage && activeChannel) {
+      console.log('[useChat] 發送 get-history', activeChannel);
       wsSendMessage({ type: "get-history", channelId: activeChannel });
     }
   }, [isConnected, wsSendMessage, activeChannel]);

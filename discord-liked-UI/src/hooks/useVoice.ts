@@ -172,19 +172,6 @@ export const useVoice = () => {
                             }
                         };
 
-                        // 先加 transceiver
-                        pc.addTransceiver('video', { direction: 'recvonly' });
-
-                        // 如果自己有開鏡頭，加 video track
-                        if (localVideoStreamRef.current) {
-                            localVideoStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localVideoStreamRef.current!));
-                        }
-
-                        // 加入本地音訊
-                        getLocalAudioStream().then(localStream => {
-                            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-                        });
-
                         pc.onicecandidate = (event) => {
                             if (event.candidate) {
                                 sendMessage({
@@ -195,18 +182,6 @@ export const useVoice = () => {
                                 });
                             }
                         };
-
-                        // 建立 offer
-                        (async () => {
-                            const offer = await pc.createOffer();
-                            await pc.setLocalDescription(offer);
-                            sendMessage({
-                                type: "offer",
-                                toId: msg.userId,
-                                fromId: myId,
-                                sdp: offer
-                            });
-                        })();
                     }
                 }
                 break;
@@ -268,9 +243,14 @@ export const useVoice = () => {
                     }
 
                     // 加入本地音訊
-                    getLocalAudioStream().then(localStream => {
-                        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-                    });
+                    if (localStreamRef.current) {
+                        localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current!));
+                    } else {
+                        // 若 audio 尚未取得，先取得再加
+                        getLocalAudioStream().then(localStream => {
+                            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                        });
+                    }
 
 
 
@@ -302,7 +282,12 @@ export const useVoice = () => {
                 const fromId = msg.fromId;
                 const pc = peerConnections[fromId];
                 if (pc) {
-                    pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                    if (pc.signalingState === "have-local-offer") {
+                        pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                    }
+                    else {
+                        console.warn("Skip setRemoteDescription(answer): signalingState=", pc.signalingState);
+                    }
                 }
                 break;
             }
