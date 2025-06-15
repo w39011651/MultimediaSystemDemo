@@ -1,0 +1,8 @@
+# k8s/managed-certificate.yaml (新增檔案)
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: discord-demo-managed-certificate
+spec:
+  domains:
+    - 34-110-230-104.nip.io # <-- 這裡也要替換為您的偽域名

@@ -16,7 +16,7 @@ spec:
       containers:
       - name: server
         # 請務必換成您上傳的後端映像路徑
-        image: asia-east1-docker.pkg.dev/atp-prediction-460115/signaling-server-repo/signaling-server:v1.0.4
+        image: asia-east1-docker.pkg.dev/atp-prediction-460115/signaling-server-repo/signaling-server:v1.0.7
         ports:
         - containerPort: 8080 # 容器內部監聽的埠號
         env: # <--- 新增這裡來定義環境變數
@@ -29,13 +29,13 @@ spec:
           httpGet:
             path: /healthz # 檢查您在 server.js 中設定的健康檢查路徑
             port: 8080
-          initialDelaySeconds: 15
+          initialDelaySeconds: 30
           periodSeconds: 20
         readinessProbe:
           httpGet:
             path: /healthz
             port: 8080
-          initialDelaySeconds: 5
+          initialDelaySeconds: 30
           periodSeconds: 10
         # --- 資源配置 ---
         resources:

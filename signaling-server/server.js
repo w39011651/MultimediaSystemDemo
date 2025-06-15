@@ -66,7 +66,7 @@ subscriber().subscribe(REDIS_CHANNEL_NAME, (redisMessage) => {
                     break;
                 case EVENT.OFFER:
                 case EVENT.ANSWER:
-                case EVENT.ICE_CANDIDATE:
+                case EVENT.CANDIDATE:
                     // WebRTC 信令需要發送給特定的 targetUserId
                     // 這裡需要判斷 current client.id 是否為 payload.targetUserId
                     if (client.id === payload.targetUserId) {

@@ -1,17 +1,27 @@
-# k8s/ingress.yaml
+# k8s/ingress.yaml (修改後)
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: discord-demo-ingress
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    # 引用下面定義的 ManagedCertificate
+    networking.gke.io/managed-certificates: "discord-demo-managed-certificate"
+    # 可選：強制 HTTP 重定向到 HTTPS
+    ingress.gcp.kubernetes.io/pre-shared-cert: "" # 留空表示自動使用 ManagedCertificate
+    # 啟用 WebSocket Passthrough (對於 GCE Ingress 來說，HTTP/2 和 WebSockets 通常是默認支持的，但這個註解有時有用)
+    # 如果遇到問題可以嘗試添加此註解
+    # service.beta.kubernetes.io/backend-config: '{"default": "backend-config-default"}' # 如果有BackendConfig
 spec:
   # 預設規則：所有未匹配到的流量都交給前端服務
   defaultBackend:
     service:
-      name: frontend-ui-service
+      name: frontend-ui-service # 您的前端 Service 名稱
       port:
-        number: 80
+        number: 80 # 前端 Service 暴露的端口
   rules:
-  - http:
+  - host: 34-110-230-104.nip.io # <-- 將這裡替換為您 Ingress 的外部 IP + .nip.io 或 .sslip.io
+    http:
       paths:
       # 當請求路徑是 /ws 或 /ws/... 時，轉發到後端服務
       # 這是我們為 WebSocket 連線指定的特殊路徑
@@ -19,6 +29,10 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: signaling-server-service
+            name: signaling-server-service # 您的後端 Service 名稱
             port:
-              number: 8080
+              number: 8080 # 後端 Service 暴露的端口
+  tls:
+  - secretName: discord-demo-managed-certificate # 這個 Secret 會由 ManagedCertificate 生成
+    hosts:
+    - 34-110-230-104.nip.io # <-- 這裡也要替換為您的偽域名

@@ -40,7 +40,7 @@ function handleJoinVoice(ws, payload){
     ws.send(JSON.stringify({
         type: EVENT.VOICE_CHANNEL_STATUS,
         channelId: channelId,
-        users: usersInChanne
+        users: usersInChannel
     }));
 
     // 將新用戶加入語音頻道的事件發布到 Redis 
