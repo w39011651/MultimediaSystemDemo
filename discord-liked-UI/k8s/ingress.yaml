@@ -20,7 +20,7 @@ spec:
       port:
         number: 80 # 前端 Service 暴露的端口
   rules:
-  - host: 34-110-230-104.nip.io # <-- 將這裡替換為您 Ingress 的外部 IP + .nip.io 或 .sslip.io
+  - host: 34-160-234-17.nip.io # <-- 將這裡替換為您 Ingress 的外部 IP + .nip.io 或 .sslip.io
     http:
       paths:
       # 當請求路徑是 /ws 或 /ws/... 時，轉發到後端服務
@@ -35,4 +35,4 @@ spec:
   tls:
   - secretName: discord-demo-managed-certificate # 這個 Secret 會由 ManagedCertificate 生成
     hosts:
-    - 34-110-230-104.nip.io # <-- 這裡也要替換為您的偽域名
+    - 34-160-234-17.nip.io # <-- 這裡也要替換為您的偽域名

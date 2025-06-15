@@ -16,7 +16,7 @@ spec:
       containers:
       - name: ui
         # 請務必換成您上傳的前端映像路徑
-        image: asia-east1-docker.pkg.dev/atp-prediction-460115/signaling-server-repo/frontend-ui:v1.0.7
+        image: asia-east1-docker.pkg.dev/atp-prediction-460115/signaling-server-repo/frontend-ui:v1.1.1
         ports:
         - containerPort: 80 # Nginx 預設監聽的埠號
         resources:

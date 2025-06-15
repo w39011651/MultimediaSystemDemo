@@ -5,4 +5,4 @@ metadata:
   name: discord-demo-managed-certificate
 spec:
   domains:
-    - 34-110-230-104.nip.io # <-- 這裡也要替換為您的偽域名
+    - 34-160-234-17.nip.io # <-- 這裡也要替換為您的偽域名

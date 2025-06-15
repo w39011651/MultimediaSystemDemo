@@ -6,20 +6,13 @@ const isVoiceEventType = (type: string): boolean => {
     return Object.values(VOICE_EVENT_TYPES).includes(type as typeof VOICE_EVENT_TYPES[keyof typeof VOICE_EVENT_TYPES]);
 };
 
-const DEV_SERVER_URL = import.meta.env.VITE_WEBSOCKET_URL;
-
-function getProductionServerUrl(): string
-{
-    const protocol = window.location.protocol;
-
-    const wsProtocol = protocol === 'https' ? 'wss' : 'ws';
-
+function getServerUrl(): string {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-
-    return `${wsProtocol}://${host}/ws`;
+    return `${protocol}//${host}/ws`;
 }
 
-const SERVER_URL = DEV_SERVER_URL ? DEV_SERVER_URL : getProductionServerUrl();
+const SERVER_URL = getServerUrl();
 
 export const useWebSocket = () => {
     const [isConnected, setIsConnected] = useState(false);
@@ -151,8 +144,8 @@ export const useWebSocket = () => {
 
         }; 
 
-        ws.current.onclose = () => {
-            console.log('WebSocket 連線關閉');
+        ws.current.onclose = (event) => {
+            console.log('WebSocket 連線關閉', event);
             setIsConnected(false);
         };
 

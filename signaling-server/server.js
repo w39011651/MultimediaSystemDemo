@@ -47,22 +47,22 @@ subscriber().subscribe(REDIS_CHANNEL_NAME, (redisMessage) => {
             // 根據從 Redis 接收到的 eventType 和 payload 構造 WebSocket 訊息
             switch (eventType) {
                 case EVENT.TEXT_MESSAGE:
-                    messageToSend = { type: EVENT.TEXT_MESSAGE, payload: payload };
+                    messageToSend = { type: EVENT.TEXT_MESSAGE, ...payload }; // <<--- 展開 payload
                     break;
                 case EVENT.USER_JOINED:
-                    messageToSend = { type: EVENT.USER_JOINED, id: payload.id, message: payload.message };
+                    messageToSend = { type: EVENT.USER_JOINED, ...payload };
                     break;
                 case EVENT.USER_LEFT:
-                    messageToSend = { type: EVENT.USER_LEFT, id: payload.id, message: payload.message };
+                    messageToSend = { type: EVENT.USER_LEFT, ...payload };
                     break;
                 case EVENT.VOICE_USER_JOINED:
-                    messageToSend = { type: EVENT.VOICE_USER_JOINED, channelId: payload.channelId, userId: payload.userId, userName: payload.userName };
+                    messageToSend = { type: EVENT.VOICE_USER_JOINED, ...payload };
                     break;
                 case EVENT.VOICE_USER_LEFT:
-                    messageToSend = { type: EVENT.VOICE_USER_LEFT, channelId: payload.channelId, userId: payload.userId, userName: payload.userName };
+                    messageToSend = { type: EVENT.VOICE_USER_LEFT, ...payload };
                     break;
                 case EVENT.VOICE_CHANNEL_MEMBERS_UPDATE: // 用於廣播語音頻道成員更新
-                    messageToSend = { type: EVENT.VOICE_CHANNEL_MEMBERS_UPDATE, members: payload.members };
+                    messageToSend = { type: EVENT.VOICE_CHANNEL_MEMBERS_UPDATE, ...payload };
                     break;
                 case EVENT.OFFER:
                 case EVENT.ANSWER:
@@ -70,7 +70,7 @@ subscriber().subscribe(REDIS_CHANNEL_NAME, (redisMessage) => {
                     // WebRTC 信令需要發送給特定的 targetUserId
                     // 這裡需要判斷 current client.id 是否為 payload.targetUserId
                     if (client.id === payload.targetUserId) {
-                        messageToSend = { type: eventType, payload: payload };
+                        messageToSend = { type: eventType, ...payload };
                     } else {
                         // 如果不是目標用戶，則不發送此信令
                         return;
@@ -93,6 +93,15 @@ subscriber().subscribe(REDIS_CHANNEL_NAME, (redisMessage) => {
     }
 });
 
+function safeSend(ws, data) {
+    try {
+        if (ws.readyState === ws.OPEN) {
+            ws.send(JSON.stringify(data));
+        }
+    } catch (e) {
+        logger.error('[safeSend] ws.send error:', e, 'data:', data);
+    }
+}
 
 // --- WebSocket 連線處理 ---
 wsServer.on('connection', (ws) => {
@@ -101,19 +110,24 @@ wsServer.on('connection', (ws) => {
     logger.info(`Client ${id} connected.`);
 
     // 初始化訊息只發送給新連接的客戶端，不需要透過 Redis
-    const userList = Object.keys(ClientManager.getAllClients()).filter(uid => uid !== id);
-    const allVoiceChannelMembers = {};
-    const voiceChannelIds = ['voice1', 'voice2']; // 假設這些是您的語音頻道 ID
-    voiceChannelIds.forEach(cid => {
-        allVoiceChannelMembers[cid] = RoomManager.getUsersInVoiceChannel(cid);
-    });
+    try {
+        // 初始化訊息
+        const userList = Object.keys(ClientManager.getAllClients()).filter(uid => uid !== id);
+        const allVoiceChannelMembers = {};
+        const voiceChannelIds = ['voice1', 'voice2'];
+        voiceChannelIds.forEach(cid => {
+            allVoiceChannelMembers[cid] = RoomManager.getUsersInVoiceChannel(cid);
+        });
 
-    ws.send(JSON.stringify({
-        type: EVENT.WELCOME,
-        id,
-        userList,
-        voiceChannelMembers: allVoiceChannelMembers
-    }));
+        safeSend(ws, {
+            type: EVENT.WELCOME,
+            id,
+            userList,
+            voiceChannelMembers: allVoiceChannelMembers
+        });
+    } catch (e) {
+        logger.error('[connection] send WELCOME error:', e);
+    }
 
     // 新用戶加入時，將 USER_JOINED 事件發布到 Redis，以便所有 Pods 廣播給各自的客戶端
     publisher().publish(REDIS_CHANNEL_NAME, JSON.stringify({
@@ -125,7 +139,11 @@ wsServer.on('connection', (ws) => {
     ws.on("message", (data) => {
         // 客戶端傳來的訊息交給 handleMessage 處理
         // handleMessage 將負責將需要廣播的訊息發布到 Redis
-        handleMessage(ws, data, id); // 將客戶端 ID 傳入
+        try {
+            handleMessage(ws, data, id); // 將客戶端 ID 傳入
+        } catch (error) {
+            logger.error(`[ws.on('message')] error:`, error, 'data:', data);
+        }
     });
 
     ws.on('close', () => {

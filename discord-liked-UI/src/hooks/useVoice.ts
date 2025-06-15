@@ -328,6 +328,9 @@ export const useVoice = () => {
             case "camera-on":
                 // 可選：收到 camera-on 時可重新協商 offer
                 break;
+            case VOICE_EVENT_TYPES.VOICE_CHANNEL_MEMBERS_UPDATE:
+                setVoiceChannelMembers(msg.members);
+                break;
             default:
                 console.warn('[useVoice] Unhandled voice message type:', msg.type);
         }

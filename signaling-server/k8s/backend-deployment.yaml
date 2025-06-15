@@ -16,7 +16,7 @@ spec:
       containers:
       - name: server
         # 請務必換成您上傳的後端映像路徑
-        image: asia-east1-docker.pkg.dev/atp-prediction-460115/signaling-server-repo/signaling-server:v1.0.7
+        image: asia-east1-docker.pkg.dev/atp-prediction-460115/signaling-server-repo/signaling-server:v1.2.0
         ports:
         - containerPort: 8080 # 容器內部監聽的埠號
         env: # <--- 新增這裡來定義環境變數
